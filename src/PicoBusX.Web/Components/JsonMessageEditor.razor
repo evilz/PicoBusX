@@ -1,0 +1,179 @@
+@using PicoBusX.Web.Models
+@inject IJSRuntime JS
+
+<div class="send-panel">
+    <div class="form-group">
+        <label>Destination</label>
+        <input type="text" @bind="_destination" class="form-control" placeholder="queue-name or topic-name" />
+    </div>
+
+    <div class="form-group">
+        <label>JSON Payload</label>
+        <div class="editor-toolbar">
+            <button class="btn-tool" @onclick="FormatJson" title="Format JSON">⚙️ Format</button>
+            <button class="btn-tool" @onclick="MinifyJson" title="Minify JSON">📦 Minify</button>
+            <button class="btn-tool" @onclick="ValidateJson" title="Validate JSON">✅ Validate</button>
+        </div>
+        <textarea @bind="_jsonPayload" rows="10" class="form-control json-editor @(_jsonError != null ? "editor-error" : "")" placeholder="{}" spellcheck="false"></textarea>
+        @if (_jsonError is not null)
+        {
+            <div class="validation-error">❌ @_jsonError</div>
+        }
+        @if (_jsonValid)
+        {
+            <div class="validation-ok">✅ Valid JSON</div>
+        }
+    </div>
+
+    <details class="optional-fields">
+        <summary>Optional Headers</summary>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Subject</label>
+                <input type="text" @bind="_subject" class="form-control" />
+            </div>
+            <div class="form-group">
+                <label>MessageId</label>
+                <input type="text" @bind="_messageId" class="form-control" placeholder="(auto-generated)" />
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>CorrelationId</label>
+                <input type="text" @bind="_correlationId" class="form-control" />
+            </div>
+            <div class="form-group">
+                <label>SessionId</label>
+                <input type="text" @bind="_sessionId" class="form-control" />
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Application Properties</label>
+            @foreach (var (key, idx) in _appProps.Select((p, i) => (p, i)))
+            {
+                var i = idx;
+                <div class="prop-row">
+                    <input type="text" placeholder="Key" @bind="_appProps[i].Key" class="form-control prop-key" />
+                    <input type="text" placeholder="Value" @bind="_appProps[i].Value" class="form-control prop-value" />
+                    <button class="btn-remove" @onclick="() => _appProps.RemoveAt(i)">✕</button>
+                </div>
+            }
+            <button class="btn-add" @onclick="() => _appProps.Add(new AppProp())">+ Add Property</button>
+        </div>
+    </details>
+
+    @if (!string.IsNullOrEmpty(SendResult))
+    {
+        <div class="send-result success">@SendResult</div>
+    }
+    @if (!string.IsNullOrEmpty(SendError))
+    {
+        <div class="send-result error">❌ @SendError</div>
+    }
+
+    <div class="send-actions">
+        <button class="btn btn-send" @onclick="HandleSend" disabled="@(IsSending || _jsonError != null)">
+            @if (IsSending) { <span>⏳ Sending…</span> } else { <span>📤 Send Message</span> }
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Destination { get; set; } = string.Empty;
+    [Parameter] public EventCallback<SendMessageRequest> OnSend { get; set; }
+    [Parameter] public bool IsSending { get; set; }
+    [Parameter] public string? SendResult { get; set; }
+    [Parameter] public string? SendError { get; set; }
+
+    private string _destination = string.Empty;
+    private string _jsonPayload = "{\n  \n}";
+    private string? _subject;
+    private string? _messageId;
+    private string? _correlationId;
+    private string? _sessionId;
+    private string? _jsonError;
+    private bool _jsonValid;
+    private List<AppProp> _appProps = new();
+
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrEmpty(Destination) && string.IsNullOrEmpty(_destination))
+            _destination = Destination;
+    }
+
+    private void FormatJson()
+    {
+        try
+        {
+            var doc = System.Text.Json.JsonDocument.Parse(_jsonPayload);
+            _jsonPayload = System.Text.Json.JsonSerializer.Serialize(doc.RootElement, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            _jsonError = null;
+            _jsonValid = true;
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            _jsonError = ex.Message;
+            _jsonValid = false;
+        }
+    }
+
+    private void MinifyJson()
+    {
+        try
+        {
+            var doc = System.Text.Json.JsonDocument.Parse(_jsonPayload);
+            _jsonPayload = System.Text.Json.JsonSerializer.Serialize(doc.RootElement);
+            _jsonError = null;
+            _jsonValid = true;
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            _jsonError = ex.Message;
+            _jsonValid = false;
+        }
+    }
+
+    private void ValidateJson()
+    {
+        try
+        {
+            System.Text.Json.JsonDocument.Parse(_jsonPayload);
+            _jsonError = null;
+            _jsonValid = true;
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            _jsonError = ex.Message;
+            _jsonValid = false;
+        }
+    }
+
+    private async Task HandleSend()
+    {
+        ValidateJson();
+        if (_jsonError is not null) return;
+
+        var request = new SendMessageRequest
+        {
+            Destination = _destination,
+            JsonPayload = _jsonPayload,
+            Subject = string.IsNullOrWhiteSpace(_subject) ? null : _subject,
+            MessageId = string.IsNullOrWhiteSpace(_messageId) ? null : _messageId,
+            CorrelationId = string.IsNullOrWhiteSpace(_correlationId) ? null : _correlationId,
+            SessionId = string.IsNullOrWhiteSpace(_sessionId) ? null : _sessionId,
+            ApplicationProperties = _appProps
+                .Where(p => !string.IsNullOrEmpty(p.Key))
+                .GroupBy(p => p.Key)
+                .ToDictionary(g => g.Key, g => g.Last().Value)
+        };
+
+        await OnSend.InvokeAsync(request);
+    }
+
+    private class AppProp
+    {
+        public string Key { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
+    }
+}

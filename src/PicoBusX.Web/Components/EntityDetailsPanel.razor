@@ -1,0 +1,102 @@
+@using PicoBusX.Web.Models
+
+@if (Entity is not null)
+{
+    <div class="details-panel">
+        @if (Entity.Type == BusEntityType.Queue)
+        {
+            var q = Queues.FirstOrDefault(x => x.Name == Entity.Name);
+            @if (q is not null)
+            {
+                <table class="details-table">
+                    <tbody>
+                        <tr><th>Name</th><td>@q.Name</td></tr>
+                        <tr><th>Active Messages</th><td><span class="badge-count">@q.ActiveMessageCount</span></td></tr>
+                        <tr><th>Dead-Letter Messages</th><td><span class="badge-count badge-dl">@q.DeadLetterMessageCount</span></td></tr>
+                        <tr><th>Transfer DL Messages</th><td>@q.TransferDeadLetterMessageCount</td></tr>
+                        <tr><th>Size</th><td>@FormatSize(q.SizeInBytes)</td></tr>
+                        <tr><th>Max Size</th><td>@q.MaxSizeInMegabytes MB</td></tr>
+                        <tr><th>Lock Duration</th><td>@q.LockDuration</td></tr>
+                        <tr><th>Max Delivery Count</th><td>@q.MaxDeliveryCount</td></tr>
+                        <tr><th>Requires Session</th><td>@(q.RequiresSession ? "✅ Yes" : "No")</td></tr>
+                        <tr><th>Created At</th><td>@FormatDate(q.CreatedAt)</td></tr>
+                        <tr><th>Updated At</th><td>@FormatDate(q.UpdatedAt)</td></tr>
+                    </tbody>
+                </table>
+            }
+            else { <p class="text-muted">Queue details not available.</p> }
+        }
+        else if (Entity.Type == BusEntityType.Topic)
+        {
+            var t = Topics.FirstOrDefault(x => x.Name == Entity.Name);
+            @if (t is not null)
+            {
+                <table class="details-table">
+                    <tbody>
+                        <tr><th>Name</th><td>@t.Name</td></tr>
+                        <tr><th>Subscriptions</th><td>@t.Subscriptions.Count</td></tr>
+                        <tr><th>Size</th><td>@FormatSize(t.SizeInBytes)</td></tr>
+                        <tr><th>Max Size</th><td>@t.MaxSizeInMegabytes MB</td></tr>
+                        <tr><th>Created At</th><td>@FormatDate(t.CreatedAt)</td></tr>
+                        <tr><th>Updated At</th><td>@FormatDate(t.UpdatedAt)</td></tr>
+                    </tbody>
+                </table>
+                <h4 style="margin-top:1rem">Subscriptions</h4>
+                <table class="details-table">
+                    <thead><tr><th>Name</th><th>Active</th><th>DL</th><th>Session</th></tr></thead>
+                    <tbody>
+                        @foreach (var s in t.Subscriptions)
+                        {
+                            <tr>
+                                <td>@s.Name</td>
+                                <td><span class="badge-count">@s.ActiveMessageCount</span></td>
+                                <td><span class="badge-count badge-dl">@s.DeadLetterMessageCount</span></td>
+                                <td>@(s.RequiresSession ? "✅" : "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else { <p class="text-muted">Topic details not available.</p> }
+        }
+        else if (Entity.Type == BusEntityType.Subscription)
+        {
+            var t = Topics.FirstOrDefault(x => x.Name == Entity.TopicName);
+            var s = t?.Subscriptions.FirstOrDefault(x => x.Name == Entity.Name);
+            @if (s is not null)
+            {
+                <table class="details-table">
+                    <tbody>
+                        <tr><th>Name</th><td>@s.Name</td></tr>
+                        <tr><th>Topic</th><td>@s.TopicName</td></tr>
+                        <tr><th>Active Messages</th><td><span class="badge-count">@s.ActiveMessageCount</span></td></tr>
+                        <tr><th>Dead-Letter Messages</th><td><span class="badge-count badge-dl">@s.DeadLetterMessageCount</span></td></tr>
+                        <tr><th>Lock Duration</th><td>@s.LockDuration</td></tr>
+                        <tr><th>Max Delivery Count</th><td>@s.MaxDeliveryCount</td></tr>
+                        <tr><th>Requires Session</th><td>@(s.RequiresSession ? "✅ Yes" : "No")</td></tr>
+                        <tr><th>Created At</th><td>@FormatDate(s.CreatedAt)</td></tr>
+                        <tr><th>Updated At</th><td>@FormatDate(s.UpdatedAt)</td></tr>
+                    </tbody>
+                </table>
+            }
+            else { <p class="text-muted">Subscription details not available.</p> }
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public BusEntity? Entity { get; set; }
+    [Parameter] public List<QueueInfo> Queues { get; set; } = new();
+    [Parameter] public List<TopicInfo> Topics { get; set; } = new();
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes == 0) return "0 B";
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024):F1} MB";
+        return $"{bytes / (1024.0 * 1024 * 1024):F2} GB";
+    }
+
+    private static string FormatDate(DateTimeOffset? dt) => dt.HasValue ? dt.Value.ToString("yyyy-MM-dd HH:mm:ss zzz") : "—";
+}

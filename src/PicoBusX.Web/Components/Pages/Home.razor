@@ -1,0 +1,240 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@inject ExplorerService Explorer
+@inject MessageSenderService Sender
+@inject MessageBrowserService Browser
+@inject Microsoft.Extensions.Options.IOptions<ServiceBusConnectionOptions> BusOptions
+@inject ILogger<Home> Logger
+
+<PageTitle>PicoBusX – Azure Service Bus Explorer</PageTitle>
+
+<div class="dashboard">
+    <!-- Left panel: Tree View -->
+    <div class="panel-tree">
+        <BusTreeView 
+            Queues="@_queues" 
+            Topics="@_topics" 
+            OnEntitySelected="HandleEntitySelected"
+            IsLoading="@_loading"
+            ErrorMessage="@_loadError" />
+        <div class="tree-actions">
+            <button class="btn btn-sm btn-refresh" @onclick="LoadDataAsync" disabled="@_loading">
+                @if (_loading) { <span>⏳ Loading…</span> } else { <span>🔄 Refresh</span> }
+            </button>
+        </div>
+    </div>
+
+    <!-- Right panel: Details + Send + Peek -->
+    <div class="panel-main">
+        @if (_selectedEntity is null)
+        {
+            <div class="empty-state">
+                <div class="empty-icon">🚌</div>
+                <h2>PicoBusX</h2>
+                <p>Select a queue, topic, or subscription from the tree to get started.</p>
+                @if (!string.IsNullOrEmpty(_connectionStatus))
+                {
+                    <div class="status-badge @(_isConnected ? "connected" : "disconnected")">
+                        @(_isConnected ? "✅ Connected" : "❌ Not Connected") — @_connectionStatus
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="entity-header">
+                <span class="entity-type-badge @_selectedEntity.Type.ToString().ToLower()">@_selectedEntity.Type</span>
+                <h2>@_selectedEntity.Name</h2>
+                @if (_selectedEntity.TopicName is not null)
+                {
+                    <span class="entity-parent">under @_selectedEntity.TopicName</span>
+                }
+            </div>
+
+            <div class="tab-bar">
+                <button class="tab @(_activeTab == "details" ? "active" : "")" @onclick='() => _activeTab = "details"'>📋 Details</button>
+                @if (_selectedEntity.Type != BusEntityType.Topic)
+                {
+                    <button class="tab @(_activeTab == "send" ? "active" : "")" @onclick='() => _activeTab = "send"'>📤 Send Message</button>
+                    <button class="tab @(_activeTab == "peek" ? "active" : "")" @onclick='() => _activeTab = "peek"'>👁️ Peek / Read</button>
+                }
+                else
+                {
+                    <button class="tab @(_activeTab == "send" ? "active" : "")" @onclick='() => _activeTab = "send"'>📤 Send to Topic</button>
+                }
+            </div>
+
+            <div class="tab-content">
+                @if (_activeTab == "details")
+                {
+                    <EntityDetailsPanel Entity="@_selectedEntity" Queues="@_queues" Topics="@_topics" />
+                }
+                else if (_activeTab == "send")
+                {
+                    <JsonMessageEditor 
+                        Destination="@_selectedEntity.EntityPath"
+                        OnSend="HandleSendMessage"
+                        IsSending="@_sending"
+                        SendResult="@_sendResult"
+                        SendError="@_sendError" />
+                }
+                else if (_activeTab == "peek")
+                {
+                    <PeekReadPanel 
+                        EntityPath="@_selectedEntity.EntityPath"
+                        DefaultMaxCount="@BusOptions.Value.EntityMaxPeek"
+                        OnPeek="HandlePeekAsync"
+                        OnReceive="HandleReceiveAsync"
+                        Messages="@_browsedMessages"
+                        IsBusy="@_browsing"
+                        ErrorMessage="@_browseError" />
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(_toast))
+{
+    <div class="toast @(_toastType)" @onclick="() => _toast = string.Empty">
+        @_toast
+    </div>
+}
+
+@code {
+    private List<QueueInfo> _queues = new();
+    private List<TopicInfo> _topics = new();
+    private BusEntity? _selectedEntity;
+    private string _activeTab = "details";
+    private bool _loading;
+    private string? _loadError;
+    private bool _isConnected;
+    private string _connectionStatus = string.Empty;
+
+    private bool _sending;
+    private string? _sendResult;
+    private string? _sendError;
+
+    private List<BrowsedMessage> _browsedMessages = new();
+    private bool _browsing;
+    private string? _browseError;
+
+    private string _toast = string.Empty;
+    private string _toastType = "toast-info";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        _loadError = null;
+        _isConnected = false;
+        StateHasChanged();
+        try
+        {
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            _queues = await Explorer.GetQueuesAsync(cts.Token);
+            _topics = await Explorer.GetTopicsAsync(cts.Token);
+            _isConnected = true;
+            _connectionStatus = $"Loaded {_queues.Count} queues, {_topics.Count} topics";
+        }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+            _connectionStatus = ex.Message;
+            Logger.LogError(ex, "Failed to load Service Bus data");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void HandleEntitySelected(BusEntity entity)
+    {
+        _selectedEntity = entity;
+        _activeTab = "details";
+        _browsedMessages = new();
+        _sendResult = null;
+        _sendError = null;
+        _browseError = null;
+    }
+
+    private async Task HandleSendMessage(SendMessageRequest request)
+    {
+        _sending = true;
+        _sendResult = null;
+        _sendError = null;
+        StateHasChanged();
+        try
+        {
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            await Sender.SendMessageAsync(request, cts.Token);
+            _sendResult = "✅ Message sent successfully!";
+            ShowToast("Message sent!", "toast-success");
+        }
+        catch (Exception ex)
+        {
+            _sendError = ex.Message;
+            Logger.LogError(ex, "Failed to send message");
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+
+    private async Task HandlePeekAsync((string entityPath, int maxCount) args)
+    {
+        _browsing = true;
+        _browseError = null;
+        _browsedMessages = new();
+        StateHasChanged();
+        try
+        {
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            _browsedMessages = await Browser.PeekMessagesAsync(args.entityPath, args.maxCount, cts.Token);
+        }
+        catch (Exception ex)
+        {
+            _browseError = ex.Message;
+            Logger.LogError(ex, "Failed to peek messages");
+        }
+        finally
+        {
+            _browsing = false;
+        }
+    }
+
+    private async Task HandleReceiveAsync((string entityPath, int maxCount) args)
+    {
+        _browsing = true;
+        _browseError = null;
+        _browsedMessages = new();
+        StateHasChanged();
+        try
+        {
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            _browsedMessages = await Browser.ReceiveAndAbandonAsync(args.entityPath, args.maxCount, cts.Token);
+        }
+        catch (Exception ex)
+        {
+            _browseError = ex.Message;
+            Logger.LogError(ex, "Failed to receive messages");
+        }
+        finally
+        {
+            _browsing = false;
+        }
+    }
+
+    private void ShowToast(string msg, string type = "toast-info")
+    {
+        _toast = msg;
+        _toastType = type;
+        _ = Task.Delay(4000).ContinueWith(_ => { _toast = string.Empty; InvokeAsync(StateHasChanged); });
+    }
+}
