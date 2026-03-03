@@ -4,10 +4,8 @@ using PicoBusX.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configuration: support ASB_CONNECTION_STRING env var
-builder.Configuration.AddEnvironmentVariables(prefix: "ASB_");
-
 // Options: ASB_CONNECTION_STRING env var takes priority over appsettings ServiceBus:ConnectionString
+// Environment variables are automatically loaded by WebApplication.CreateBuilder
 builder.Services.Configure<ServiceBusConnectionOptions>(options =>
 {
     options.ConnectionString = builder.Configuration["ASB_CONNECTION_STRING"]

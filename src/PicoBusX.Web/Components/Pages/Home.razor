@@ -1,5 +1,6 @@
 ﻿@page "/"
 @rendermode InteractiveServer
+@implements IDisposable
 @inject ExplorerService Explorer
 @inject MessageSenderService Sender
 @inject MessageBrowserService Browser
@@ -231,10 +232,23 @@
         }
     }
 
+    private CancellationTokenSource? _toastCts;
+
     private void ShowToast(string msg, string type = "toast-info")
     {
         _toast = msg;
         _toastType = type;
-        _ = Task.Delay(4000).ContinueWith(_ => { _toast = string.Empty; InvokeAsync(StateHasChanged); });
+        _toastCts?.Cancel();
+        _toastCts = new CancellationTokenSource();
+        var token = _toastCts.Token;
+        _ = Task.Delay(4000, token)
+            .ContinueWith(_ => { _toast = string.Empty; InvokeAsync(StateHasChanged); },
+                TaskContinuationOptions.OnlyOnRanToCompletion);
+    }
+
+    public void Dispose()
+    {
+        _toastCts?.Cancel();
+        _toastCts?.Dispose();
     }
 }

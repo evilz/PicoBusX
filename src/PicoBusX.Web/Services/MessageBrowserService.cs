@@ -41,7 +41,8 @@ public class MessageBrowserService
         // Abandon all locks so messages are returned to the queue immediately.
         foreach (var m in messages)
         {
-            try { await receiver.AbandonMessageAsync(m, cancellationToken: ct); } catch { }
+            try { await receiver.AbandonMessageAsync(m, cancellationToken: ct); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to abandon message {MessageId}", m.MessageId); }
         }
         return result;
     }
