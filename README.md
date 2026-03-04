@@ -147,7 +147,7 @@ src/
 
 ## Known Limits
 
-- **Azure Service Bus Emulator** - ✅ **Fully supported!** Port 5300 is now exposed for admin/management operations. All CRUD operations and entity management work with the emulator. See [PORT_5300_EXPOSED.md](./PORT_5300_EXPOSED.md) for details.
+- **Azure Service Bus Emulator** - ✅ **Supported** when running under Aspire (port 5300 is exposed for admin/management operations). All CRUD operations and entity management work with the emulator.
 - **No Azure AD / Managed Identity** support yet — only connection-string auth (SAS). AAD auth can be added by injecting `TokenCredential` into `ServiceBusClientFactory`.
 - **Peek is non-destructive** (uses `PeekMessages`). The "Receive" action uses PeekLock and immediately abandons messages after reading (non-destructive by default). Full consume is not available in this version.
 - **No dead-letter browser** — to peek DLQ, the entity path must be manually set to `<queue>/$DeadLetterQueue`.

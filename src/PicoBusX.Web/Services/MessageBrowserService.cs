@@ -1,20 +1,16 @@
 using Azure.Messaging.ServiceBus;
-using Microsoft.Extensions.Options;
 using PicoBusX.Web.Models;
-using PicoBusX.Web.Options;
 
 namespace PicoBusX.Web.Services;
 
 public class MessageBrowserService
 {
     private readonly ServiceBusClientFactory _factory;
-    private readonly ServiceBusConnectionOptions _options;
     private readonly ILogger<MessageBrowserService> _logger;
 
-    public MessageBrowserService(ServiceBusClientFactory factory, IOptions<ServiceBusConnectionOptions> options, ILogger<MessageBrowserService> logger)
+    public MessageBrowserService(ServiceBusClientFactory factory, ILogger<MessageBrowserService> logger)
     {
         _factory = factory;
-        _options = options.Value;
         _logger = logger;
     }
 

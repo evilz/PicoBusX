@@ -65,7 +65,7 @@ public class ExplorerService
                 result = await GetQueuesFromKnownEntitiesAsync(admin, ct);
             }
         }
-        catch (Exception ex) when (ex is Azure.RequestFailedException || ex.InnerException is System.Net.Sockets.SocketException)
+        catch (Exception ex) when (IsConnectivityError(ex))
         {
             _logger.LogWarning(ex, "Admin client not available. This may be due to emulator port 5300 not being exposed. Returning empty queue list.");
             _logger.LogInformation("Tip: Ensure the Azure Service Bus emulator is running and port 5300 is exposed for management operations.");
@@ -124,7 +124,7 @@ public class ExplorerService
                 result = await GetTopicsFromKnownEntitiesAsync(admin, ct);
             }
         }
-        catch (Exception ex) when (ex is Azure.RequestFailedException || ex.InnerException is System.Net.Sockets.SocketException)
+        catch (Exception ex) when (IsConnectivityError(ex))
         {
             _logger.LogWarning(ex, "Admin client not available. This may be due to emulator port 5300 not being exposed. Returning empty topic list.");
             _logger.LogInformation("Tip: Ensure the Azure Service Bus emulator is running and port 5300 is exposed for management operations.");
@@ -150,6 +150,22 @@ public class ExplorerService
                    && sbEx.Reason == Azure.Messaging.ServiceBus.ServiceBusFailureReason.MessagingEntityNotFound
                || ex is Azure.RequestFailedException rfEx 
                    && rfEx.Status == 404;
+    }
+
+    /// <summary>
+    /// Returns true only for transient connectivity failures (socket/network errors, HTTP 503/504/408).
+    /// Auth and configuration errors (401, 403, 400) are NOT matched — those should propagate so
+    /// the UI can surface a meaningful "invalid credentials" or "bad endpoint" error.
+    /// </summary>
+    private static bool IsConnectivityError(Exception ex)
+    {
+        if (ex.InnerException is System.Net.Sockets.SocketException or System.IO.IOException)
+            return true;
+
+        if (ex is Azure.RequestFailedException rfe)
+            return rfe.Status is 503 or 504 or 408 or 0;
+
+        return false;
     }
     
     /// <summary>

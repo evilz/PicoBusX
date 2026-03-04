@@ -136,7 +136,7 @@
         StateHasChanged();
         try
         {
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             _queues = await Explorer.GetQueuesAsync(cts.Token);
             _topics = await Explorer.GetTopicsAsync(cts.Token);
             _isConnected = true;
@@ -172,7 +172,7 @@
         StateHasChanged();
         try
         {
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             await Sender.SendMessageAsync(request, cts.Token);
             _sendResult = "✅ Message sent successfully!";
             ShowToast("Message sent!", "toast-success");
@@ -196,7 +196,7 @@
         StateHasChanged();
         try
         {
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             _browsedMessages = await Browser.PeekMessagesAsync(args.entityPath, args.maxCount, cts.Token);
         }
         catch (Exception ex)
@@ -218,7 +218,7 @@
         StateHasChanged();
         try
         {
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             _browsedMessages = await Browser.ReceiveAndAbandonAsync(args.entityPath, args.maxCount, cts.Token);
         }
         catch (Exception ex)
