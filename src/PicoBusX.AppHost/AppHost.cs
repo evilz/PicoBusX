@@ -4,7 +4,7 @@
 // Expose port 5300 for admin/management operations using WithEndpoint
  var serviceBus = builder
      .AddAzureServiceBus("serviceBus")
-     .RunAsEmulator();
+     .RunAsEmulator(resourceBuilder => resourceBuilder.WithImageTag("latest"));
 
 // Pre-create default entities for exploration and testing
 serviceBus.AddServiceBusQueue("Queue1");
