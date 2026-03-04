@@ -954,3 +954,135 @@ fluent-tooltip[anchor="dialog_close"] > div {
 fluent-dialog#chat-modal-dialog fluent-button[appearance=stealth]:not(:hover)::part(control) {
     background: var(--chat-background-color);
 }
+
+.dashboard {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: calc(100vh - 52px);
+    background: var(--main-container-background-color);
+}
+
+.panel-tree {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--neutral-stroke-divider-rest);
+    background: var(--main-sidebar-background-color);
+    min-width: 0;
+}
+
+.tree-panel {
+    flex: 1;
+    overflow: auto;
+    padding: 10px;
+}
+
+.tree-search {
+    margin-bottom: 10px;
+}
+
+.tree-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--foreground-subtext-rest);
+    padding: 0.25rem;
+}
+
+.tree-group-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--foreground-subtext-rest);
+}
+
+.tree-item-label {
+    font-size: 0.9rem;
+}
+
+.tree-actions {
+    padding: 10px;
+    border-top: 1px solid var(--neutral-stroke-divider-rest);
+    background: var(--neutral-layer-1);
+}
+
+.panel-main {
+    padding: 16px;
+    overflow: auto;
+}
+
+.empty-state {
+    margin: 12vh auto 0;
+    max-width: 560px;
+    text-align: center;
+}
+
+.empty-icon {
+    font-size: 3.75rem;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+
+.entity-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.entity-parent {
+    color: var(--foreground-subtext-rest);
+    font-size: 0.86rem;
+}
+
+.details-panel,
+.send-panel,
+.peek-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.details-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.details-table th,
+.details-table td {
+    text-align: left;
+    border-bottom: 1px solid var(--table-body-border-color);
+    padding: 0.5rem;
+    vertical-align: top;
+}
+
+.details-table th {
+    width: 32%;
+    color: var(--foreground-subtext-rest);
+    font-weight: 600;
+}
+
+.body-pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    border-radius: 8px;
+    padding: 0.75rem;
+    background: color-mix(in srgb, var(--neutral-layer-4) 75%, #000 25%);
+    color: #f5f5f5;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.82rem;
+}
+
+@media (max-width: 1000px) {
+    .dashboard {
+        grid-template-columns: 1fr;
+        min-height: auto;
+    }
+
+    .panel-tree {
+        border-right: none;
+        border-bottom: 1px solid var(--neutral-stroke-divider-rest);
+        max-height: 45vh;
+    }
+}
