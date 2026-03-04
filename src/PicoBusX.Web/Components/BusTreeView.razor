@@ -2,93 +2,97 @@
 
 <div class="tree-panel">
     <div class="tree-search">
-        <input type="text" placeholder="🔍 Filter..." @bind="_filter" @bind:event="oninput" class="search-input" />
+        <FluentSearch Placeholder="Filter..."
+                      @bind-Value="_filter"
+                      Style="width: 100%;" />
     </div>
 
     @if (IsLoading)
     {
-        <div class="tree-loading">⏳ Loading…</div>
+        <div class="tree-loading">
+            <FluentProgressRing Style="width: 24px; height: 24px;" />
+            <span>Loading…</span>
+        </div>
     }
     else if (!string.IsNullOrEmpty(ErrorMessage))
     {
-        <div class="tree-error">❌ @ErrorMessage</div>
+        <FluentMessageBar Intent="MessageIntent.Error" Style="margin: 0.5rem;">
+            @ErrorMessage
+        </FluentMessageBar>
     }
     else
     {
-        <div class="tree-section">
-            <div class="tree-group-header" @onclick="() => _queuesExpanded = !_queuesExpanded">
-                <span class="caret">@(_queuesExpanded ? "▼" : "▶")</span>
-                <span class="icon">📥</span>
-                <span>Queues (@FilteredQueues.Count)</span>
-            </div>
-            @if (_queuesExpanded)
-            {
-                @foreach (var queue in FilteredQueues)
-                {
-                    <div class="tree-item @(IsSelected(queue) ? "selected" : "")" @onclick="() => SelectQueue(queue)">
-                        <span class="icon">📩</span>
-                        <span class="name">@queue.Name</span>
-                        @if (queue.ActiveMessageCount > 0)
-                        {
-                            <span class="badge">@queue.ActiveMessageCount</span>
-                        }
-                        @if (queue.DeadLetterMessageCount > 0)
-                        {
-                            <span class="badge badge-dl">DL:@queue.DeadLetterMessageCount</span>
-                        }
-                    </div>
-                }
-                @if (!FilteredQueues.Any())
-                {
-                    <div class="tree-empty">No queues match the filter</div>
-                }
-            }
-        </div>
-
-        <div class="tree-section">
-            <div class="tree-group-header" @onclick="() => _topicsExpanded = !_topicsExpanded">
-                <span class="caret">@(_topicsExpanded ? "▼" : "▶")</span>
-                <span class="icon">📢</span>
-                <span>Topics (@FilteredTopics.Count)</span>
-            </div>
-            @if (_topicsExpanded)
-            {
-                @foreach (var topic in FilteredTopics)
-                {
-                    var topicCopy = topic;
-                    var topicExpanded = _expandedTopics.Contains(topic.Name);
-                    <div class="tree-item topic-item @(IsTopicSelected(topic) ? "selected" : "")" @onclick="() => SelectTopic(topicCopy)">
-                        <span class="caret-sub" @onclick:stopPropagation @onclick="() => ToggleTopic(topicCopy.Name)">@(topicExpanded ? "▼" : "▶")</span>
-                        <span class="icon">📢</span>
-                        <span class="name">@topic.Name</span>
-                        <span class="sub-count">@topic.Subscriptions.Count subs</span>
-                    </div>
-                    @if (topicExpanded)
+        <FluentTreeView>
+            <FluentTreeItem Expanded="@_queuesExpanded"
+                            OnExpandCollapse="e => _queuesExpanded = e.Expanded">
+                <ChildContent>
+                    <span class="tree-group-label">Queues (@FilteredQueues.Count)</span>
+                    @foreach (var queue in FilteredQueues)
                     {
-                        @foreach (var sub in topic.Subscriptions.Where(s => string.IsNullOrEmpty(_filter) || s.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)))
-                        {
-                            var subCopy = sub;
-                            <div class="tree-item sub-item @(IsSubSelected(sub) ? "selected" : "")" @onclick="() => SelectSub(subCopy)">
-                                <span class="icon">🔔</span>
-                                <span class="name">@sub.Name</span>
-                                @if (sub.ActiveMessageCount > 0)
+                        var queueCopy = queue;
+                        <FluentTreeItem Selected="@IsSelected(queue)" OnClick="() => SelectQueue(queueCopy)">
+                            <ChildContent>
+                                <span class="tree-item-label">@queue.Name</span>
+                                @if (queue.ActiveMessageCount > 0)
                                 {
-                                    <span class="badge">@sub.ActiveMessageCount</span>
+                                    <FluentBadge Appearance="Appearance.Accent" Style="margin-left: 0.35rem; font-size: 0.7rem;">@queue.ActiveMessageCount</FluentBadge>
                                 }
-                                @if (sub.DeadLetterMessageCount > 0)
+                                @if (queue.DeadLetterMessageCount > 0)
                                 {
-                                    <span class="badge badge-dl">DL:@sub.DeadLetterMessageCount</span>
+                                    <FluentBadge Appearance="Appearance.Neutral" Style="margin-left: 0.25rem; font-size: 0.7rem; background: #f08030; color: white;">DL:@queue.DeadLetterMessageCount</FluentBadge>
                                 }
-                            </div>
-                        }
+                            </ChildContent>
+                        </FluentTreeItem>
                     }
-                }
-                @if (!FilteredTopics.Any())
-                {
-                    <div class="tree-empty">No topics match the filter</div>
-                }
-            }
-        </div>
+                    @if (!FilteredQueues.Any())
+                    {
+                        <FluentTreeItem Text="No queues match the filter" Disabled="true" />
+                    }
+                </ChildContent>
+            </FluentTreeItem>
+
+            <FluentTreeItem Expanded="@_topicsExpanded"
+                            OnExpandCollapse="e => _topicsExpanded = e.Expanded">
+                <ChildContent>
+                    <span class="tree-group-label">Topics (@FilteredTopics.Count)</span>
+                    @foreach (var topic in FilteredTopics)
+                    {
+                        var topicCopy = topic;
+                        var topicExpanded = _expandedTopics.Contains(topic.Name);
+                        <FluentTreeItem Selected="@IsTopicSelected(topic)"
+                                        Expanded="@topicExpanded"
+                                        OnExpandCollapse="e => OnTopicExpandCollapse(topicCopy.Name, e.Expanded)"
+                                        OnClick="() => SelectTopic(topicCopy)">
+                            <ChildContent>
+                                <span class="tree-item-label">@topic.Name</span>
+                                <span style="font-size: 0.72rem; opacity: 0.6; margin-left: 0.4rem;">@topic.Subscriptions.Count subs</span>
+                                @foreach (var sub in topic.Subscriptions.Where(s => string.IsNullOrEmpty(_filter) || s.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)))
+                                {
+                                    var subCopy = sub;
+                                    <FluentTreeItem Selected="@IsSubSelected(sub)" OnClick="() => SelectSub(subCopy)">
+                                        <ChildContent>
+                                            <span class="tree-item-label">@sub.Name</span>
+                                            @if (sub.ActiveMessageCount > 0)
+                                            {
+                                                <FluentBadge Appearance="Appearance.Accent" Style="margin-left: 0.35rem; font-size: 0.7rem;">@sub.ActiveMessageCount</FluentBadge>
+                                            }
+                                            @if (sub.DeadLetterMessageCount > 0)
+                                            {
+                                                <FluentBadge Appearance="Appearance.Neutral" Style="margin-left: 0.25rem; font-size: 0.7rem; background: #f08030; color: white;">DL:@sub.DeadLetterMessageCount</FluentBadge>
+                                            }
+                                        </ChildContent>
+                                    </FluentTreeItem>
+                                }
+                            </ChildContent>
+                        </FluentTreeItem>
+                    }
+                    @if (!FilteredTopics.Any())
+                    {
+                        <FluentTreeItem Text="No topics match the filter" Disabled="true" />
+                    }
+                </ChildContent>
+            </FluentTreeItem>
+        </FluentTreeView>
     }
 </div>
 
@@ -118,10 +122,10 @@
     private bool IsTopicSelected(TopicInfo t) => _selected?.Type == BusEntityType.Topic && _selected.Name == t.Name;
     private bool IsSubSelected(SubscriptionInfo s) => _selected?.Type == BusEntityType.Subscription && _selected.Name == s.Name && _selected.TopicName == s.TopicName;
 
-    private void ToggleTopic(string topicName)
+    private void OnTopicExpandCollapse(string topicName, bool expanded)
     {
-        if (_expandedTopics.Contains(topicName)) _expandedTopics.Remove(topicName);
-        else _expandedTopics.Add(topicName);
+        if (expanded) _expandedTopics.Add(topicName);
+        else _expandedTopics.Remove(topicName);
     }
 
     private async Task SelectQueue(QueueInfo queue)

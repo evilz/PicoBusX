@@ -1,3 +1,4 @@
+using Microsoft.FluentUI.AspNetCore.Components;
 using PicoBusX.Web.Components;
 using PicoBusX.Web.Options;
 using PicoBusX.Web.Services;
@@ -34,6 +35,9 @@ builder.Services.AddSingleton<ServiceBusClientFactory>();
 builder.Services.AddScoped<ExplorerService>();
 builder.Services.AddScoped<MessageSenderService>();
 builder.Services.AddScoped<MessageBrowserService>();
+
+// Add Fluent UI Blazor services
+builder.Services.AddFluentUIComponents();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()

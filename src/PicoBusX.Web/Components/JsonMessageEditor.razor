@@ -1,81 +1,104 @@
 @using PicoBusX.Web.Models
 
 <div class="send-panel">
-    <div class="form-group">
-        <label>Destination</label>
-        <input type="text" @bind="_destination" class="form-control" placeholder="queue-name or topic-name" />
-    </div>
+    <FluentStack Orientation="Orientation.Vertical" Style="gap: 1rem;">
 
-    <div class="form-group">
-        <label>JSON Payload</label>
-        <div class="editor-toolbar">
-            <button class="btn-tool" @onclick="FormatJson" title="Format JSON">⚙️ Format</button>
-            <button class="btn-tool" @onclick="MinifyJson" title="Minify JSON">📦 Minify</button>
-            <button class="btn-tool" @onclick="ValidateJson" title="Validate JSON">✅ Validate</button>
-        </div>
-        <textarea @bind="_jsonPayload" rows="10" class="form-control json-editor @(_jsonError != null ? "editor-error" : "")" placeholder="{}" spellcheck="false"></textarea>
-        @if (_jsonError is not null)
-        {
-            <div class="validation-error">❌ @_jsonError</div>
-        }
-        @if (_jsonValid)
-        {
-            <div class="validation-ok">✅ Valid JSON</div>
-        }
-    </div>
+        <FluentTextField Label="Destination"
+                         @bind-Value="_destination"
+                         Placeholder="queue-name or topic-name"
+                         Style="width: 100%;" />
 
-    <details class="optional-fields">
-        <summary>Optional Headers</summary>
-        <div class="form-row">
-            <div class="form-group">
-                <label>Subject</label>
-                <input type="text" @bind="_subject" class="form-control" />
-            </div>
-            <div class="form-group">
-                <label>MessageId</label>
-                <input type="text" @bind="_messageId" class="form-control" placeholder="(auto-generated)" />
-            </div>
-        </div>
-        <div class="form-row">
-            <div class="form-group">
-                <label>CorrelationId</label>
-                <input type="text" @bind="_correlationId" class="form-control" />
-            </div>
-            <div class="form-group">
-                <label>SessionId</label>
-                <input type="text" @bind="_sessionId" class="form-control" />
-            </div>
-        </div>
-
-        <div class="form-group">
-            <label>Application Properties</label>
-            @foreach (var (key, idx) in _appProps.Select((p, i) => (p, i)))
+        <div>
+            <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">JSON Payload</FluentLabel>
+            <FluentStack Orientation="Orientation.Horizontal" Style="gap: 0.5rem; margin-bottom: 0.5rem;">
+                <FluentButton Appearance="Appearance.Outline" OnClick="FormatJson" Title="Format JSON">
+                    Format
+                </FluentButton>
+                <FluentButton Appearance="Appearance.Outline" OnClick="MinifyJson" Title="Minify JSON">
+                    Minify
+                </FluentButton>
+                <FluentButton Appearance="Appearance.Outline" OnClick="ValidateJson" Title="Validate JSON">
+                    Validate
+                </FluentButton>
+            </FluentStack>
+            <textarea @bind="_jsonPayload"
+                      rows="10"
+                      class="json-editor @(_jsonError != null ? "editor-error" : "")"
+                      placeholder="{}"
+                      spellcheck="false"
+                      style="width: 100%; box-sizing: border-box;"></textarea>
+            @if (_jsonError is not null)
             {
-                var i = idx;
-                <div class="prop-row">
-                    <input type="text" placeholder="Key" @bind="_appProps[i].Key" class="form-control prop-key" />
-                    <input type="text" placeholder="Value" @bind="_appProps[i].Value" class="form-control prop-value" />
-                    <button class="btn-remove" @onclick="() => _appProps.RemoveAt(i)">✕</button>
-                </div>
+                <FluentMessageBar Intent="MessageIntent.Error" Style="margin-top: 0.25rem;">@_jsonError</FluentMessageBar>
             }
-            <button class="btn-add" @onclick="() => _appProps.Add(new AppProp())">+ Add Property</button>
+            @if (_jsonValid && _jsonError is null)
+            {
+                <FluentMessageBar Intent="MessageIntent.Success" Style="margin-top: 0.25rem;">Valid JSON</FluentMessageBar>
+            }
         </div>
-    </details>
 
-    @if (!string.IsNullOrEmpty(SendResult))
-    {
-        <div class="send-result success">@SendResult</div>
-    }
-    @if (!string.IsNullOrEmpty(SendError))
-    {
-        <div class="send-result error">❌ @SendError</div>
-    }
+        <FluentAccordion>
+            <FluentAccordionItem Heading="Optional Headers">
+                <FluentStack Orientation="Orientation.Vertical" Style="gap: 0.75rem; padding: 0.5rem 0;">
+                    <FluentGrid Spacing="2">
+                        <FluentGridItem xs="12" sm="6">
+                            <FluentTextField Label="Subject" @bind-Value="_subject" Style="width: 100%;" />
+                        </FluentGridItem>
+                        <FluentGridItem xs="12" sm="6">
+                            <FluentTextField Label="MessageId" @bind-Value="_messageId" Placeholder="(auto-generated)" Style="width: 100%;" />
+                        </FluentGridItem>
+                        <FluentGridItem xs="12" sm="6">
+                            <FluentTextField Label="CorrelationId" @bind-Value="_correlationId" Style="width: 100%;" />
+                        </FluentGridItem>
+                        <FluentGridItem xs="12" sm="6">
+                            <FluentTextField Label="SessionId" @bind-Value="_sessionId" Style="width: 100%;" />
+                        </FluentGridItem>
+                    </FluentGrid>
 
-    <div class="send-actions">
-        <button class="btn btn-send" @onclick="HandleSend" disabled="@(IsSending || _jsonError != null)">
-            @if (IsSending) { <span>⏳ Sending…</span> } else { <span>📤 Send Message</span> }
-        </button>
-    </div>
+                    <div>
+                        <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.5rem;">Application Properties</FluentLabel>
+                        @foreach (var (key, idx) in _appProps.Select((p, i) => (p, i)))
+                        {
+                            var i = idx;
+                            <FluentStack Orientation="Orientation.Horizontal" Style="gap: 0.5rem; margin-bottom: 0.4rem; align-items: flex-end;">
+                                <FluentTextField Placeholder="Key" @bind-Value="_appProps[i].Key" Style="flex: 1;" />
+                                <FluentTextField Placeholder="Value" @bind-Value="_appProps[i].Value" Style="flex: 2;" />
+                                <FluentButton Appearance="Appearance.Outline"
+                                              IconStart="@(new Icons.Regular.Size16.Dismiss())"
+                                              OnClick="() => _appProps.RemoveAt(i)"
+                                              Style="color: #dc2626;" />
+                            </FluentStack>
+                        }
+                        <FluentButton Appearance="Appearance.Outline"
+                                      IconStart="@(new Icons.Regular.Size16.Add())"
+                                      OnClick="() => _appProps.Add(new AppProp())">
+                            Add Property
+                        </FluentButton>
+                    </div>
+                </FluentStack>
+            </FluentAccordionItem>
+        </FluentAccordion>
+
+        @if (!string.IsNullOrEmpty(SendResult))
+        {
+            <FluentMessageBar Intent="MessageIntent.Success">@SendResult</FluentMessageBar>
+        }
+        @if (!string.IsNullOrEmpty(SendError))
+        {
+            <FluentMessageBar Intent="MessageIntent.Error">@SendError</FluentMessageBar>
+        }
+
+        <div>
+            <FluentButton Appearance="Appearance.Accent"
+                          IconStart="@(new Icons.Regular.Size16.Send())"
+                          OnClick="HandleSend"
+                          Disabled="@(IsSending || _jsonError != null)"
+                          Style="min-width: 160px;">
+                @if (IsSending) { <span>Sending…</span> } else { <span>Send Message</span> }
+            </FluentButton>
+        </div>
+
+    </FluentStack>
 </div>
 
 @code {
