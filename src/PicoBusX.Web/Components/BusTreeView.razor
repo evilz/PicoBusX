@@ -29,8 +29,7 @@
                     <span class="tree-group-label">Queues (@FilteredQueues.Count)</span>
                     @foreach (var queue in FilteredQueues)
                     {
-                        var queueCopy = queue;
-                        <FluentTreeItem Selected="@IsSelected(queue)" OnClick="() => SelectQueue(queueCopy)">
+                        <FluentTreeItem Selected="@IsSelected(queue)" OnClick="() => SelectQueue(queue)">
                             <ChildContent>
                                 <span class="tree-item-label">@queue.Name</span>
                                 @if (queue.ActiveMessageCount > 0)
@@ -57,19 +56,17 @@
                     <span class="tree-group-label">Topics (@FilteredTopics.Count)</span>
                     @foreach (var topic in FilteredTopics)
                     {
-                        var topicCopy = topic;
                         var topicExpanded = _expandedTopics.Contains(topic.Name);
                         <FluentTreeItem Selected="@IsTopicSelected(topic)"
                                         Expanded="@topicExpanded"
-                                        OnExpandCollapse="e => OnTopicExpandCollapse(topicCopy.Name, e.Expanded)"
-                                        OnClick="() => SelectTopic(topicCopy)">
+                                        OnExpandCollapse="e => OnTopicExpandCollapse(topic.Name, e.Expanded)"
+                                        OnClick="() => SelectTopic(topic)">
                             <ChildContent>
                                 <span class="tree-item-label">@topic.Name</span>
                                 <span style="font-size: 0.72rem; opacity: 0.6; margin-left: 0.4rem;">@topic.Subscriptions.Count subs</span>
                                 @foreach (var sub in topic.Subscriptions.Where(s => string.IsNullOrEmpty(_filter) || s.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)))
                                 {
-                                    var subCopy = sub;
-                                    <FluentTreeItem Selected="@IsSubSelected(sub)" OnClick="() => SelectSub(subCopy)">
+                                    <FluentTreeItem Selected="@IsSubSelected(sub)" OnClick="() => SelectSub(sub)">
                                         <ChildContent>
                                             <span class="tree-item-label">@sub.Name</span>
                                             @if (sub.ActiveMessageCount > 0)
