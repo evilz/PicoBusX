@@ -1,0 +1,126 @@
+@using PicoBusX.Web.Models
+
+<div class="peek-panel">
+    <div class="peek-controls">
+        <div class="form-group inline">
+            <label>Max Messages:</label>
+            <input type="number" @bind="_maxCount" min="1" max="500" class="form-control count-input" />
+        </div>
+        <button class="btn btn-peek" @onclick="DoPeek" disabled="@IsBusy">
+            @if (IsBusy) { <span>⏳</span> } else { <span>👁️ Peek</span> }
+        </button>
+        <button class="btn btn-receive" @onclick="DoReceive" disabled="@IsBusy">
+            @if (IsBusy) { <span>⏳</span> } else { <span>📥 Receive</span> }
+        </button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="error-banner">❌ @ErrorMessage</div>
+    }
+
+    @if (Messages.Any())
+    {
+        <div class="messages-count">Showing @Messages.Count message(s)</div>
+        <div class="messages-list">
+            @foreach (var (msg, idx) in Messages.Select((m, i) => (m, i)))
+            {
+                var isExpanded = _expanded.Contains(idx);
+                <div class="message-card @(isExpanded ? "expanded" : "")">
+                    <div class="message-header" @onclick="() => ToggleMessage(idx)">
+                        <span class="msg-idx">#@(idx + 1)</span>
+                        <span class="msg-id">@(msg.MessageId ?? "—")</span>
+                        <span class="msg-time">@msg.EnqueuedTime.ToString("HH:mm:ss")</span>
+                        @if (!string.IsNullOrEmpty(msg.Subject))
+                        {
+                            <span class="msg-subject">@msg.Subject</span>
+                        }
+                        <span class="msg-delivery">DC:@msg.DeliveryCount</span>
+                        <span class="expand-icon">@(isExpanded ? "▲" : "▼")</span>
+                    </div>
+                    @if (isExpanded)
+                    {
+                        <div class="message-body">
+                            <div class="message-meta">
+                                @if (!string.IsNullOrEmpty(msg.SessionId)) { <span><strong>SessionId:</strong> @msg.SessionId</span> }
+                                @if (!string.IsNullOrEmpty(msg.CorrelationId)) { <span><strong>CorrelationId:</strong> @msg.CorrelationId</span> }
+                                @if (!string.IsNullOrEmpty(msg.ContentType)) { <span><strong>ContentType:</strong> @msg.ContentType</span> }
+                                <span><strong>Enqueued:</strong> @msg.EnqueuedTime.ToString("yyyy-MM-dd HH:mm:ss zzz")</span>
+                            </div>
+
+                            @if (msg.ApplicationProperties.Any())
+                            {
+                                <div class="app-props">
+                                    <strong>Application Properties:</strong>
+                                    <table class="details-table">
+                                        <tbody>
+                                            @foreach (var kv in msg.ApplicationProperties)
+                                            {
+                                                <tr><td>@kv.Key</td><td>@kv.Value</td></tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+
+                            <div class="msg-body-section">
+                                <strong>Body:</strong>
+                                <pre class="body-pre">@PrettyPrint(msg.Body)</pre>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+    else if (!IsBusy && string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="empty-state-small">Use Peek to preview messages (non-destructive) or Receive to consume them.</div>
+    }
+</div>
+
+@code {
+    [Parameter] public string EntityPath { get; set; } = string.Empty;
+    [Parameter] public int DefaultMaxCount { get; set; } = 10;
+    [Parameter] public EventCallback<(string, int)> OnPeek { get; set; }
+    [Parameter] public EventCallback<(string, int)> OnReceive { get; set; }
+    [Parameter] public List<BrowsedMessage> Messages { get; set; } = new();
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+
+    private int _maxCount;
+    private HashSet<int> _expanded = new();
+
+    protected override void OnInitialized()
+    {
+        _maxCount = DefaultMaxCount > 0 ? DefaultMaxCount : 10;
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (_maxCount == 0) _maxCount = DefaultMaxCount > 0 ? DefaultMaxCount : 10;
+    }
+
+    private async Task DoPeek() => await OnPeek.InvokeAsync((EntityPath, _maxCount));
+    private async Task DoReceive() => await OnReceive.InvokeAsync((EntityPath, _maxCount));
+
+    private void ToggleMessage(int idx)
+    {
+        if (_expanded.Contains(idx)) _expanded.Remove(idx);
+        else _expanded.Add(idx);
+    }
+
+    private static string PrettyPrint(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return "(empty)";
+        try
+        {
+            var doc = System.Text.Json.JsonDocument.Parse(body);
+            return System.Text.Json.JsonSerializer.Serialize(doc.RootElement, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return body;
+        }
+    }
+}

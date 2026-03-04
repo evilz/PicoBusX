@@ -1,0 +1,145 @@
+@using PicoBusX.Web.Models
+
+<div class="tree-panel">
+    <div class="tree-search">
+        <input type="text" placeholder="🔍 Filter..." @bind="_filter" @bind:event="oninput" class="search-input" />
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="tree-loading">⏳ Loading…</div>
+    }
+    else if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="tree-error">❌ @ErrorMessage</div>
+    }
+    else
+    {
+        <div class="tree-section">
+            <div class="tree-group-header" @onclick="() => _queuesExpanded = !_queuesExpanded">
+                <span class="caret">@(_queuesExpanded ? "▼" : "▶")</span>
+                <span class="icon">📥</span>
+                <span>Queues (@FilteredQueues.Count)</span>
+            </div>
+            @if (_queuesExpanded)
+            {
+                @foreach (var queue in FilteredQueues)
+                {
+                    <div class="tree-item @(IsSelected(queue) ? "selected" : "")" @onclick="() => SelectQueue(queue)">
+                        <span class="icon">📩</span>
+                        <span class="name">@queue.Name</span>
+                        @if (queue.ActiveMessageCount > 0)
+                        {
+                            <span class="badge">@queue.ActiveMessageCount</span>
+                        }
+                        @if (queue.DeadLetterMessageCount > 0)
+                        {
+                            <span class="badge badge-dl">DL:@queue.DeadLetterMessageCount</span>
+                        }
+                    </div>
+                }
+                @if (!FilteredQueues.Any())
+                {
+                    <div class="tree-empty">No queues match the filter</div>
+                }
+            }
+        </div>
+
+        <div class="tree-section">
+            <div class="tree-group-header" @onclick="() => _topicsExpanded = !_topicsExpanded">
+                <span class="caret">@(_topicsExpanded ? "▼" : "▶")</span>
+                <span class="icon">📢</span>
+                <span>Topics (@FilteredTopics.Count)</span>
+            </div>
+            @if (_topicsExpanded)
+            {
+                @foreach (var topic in FilteredTopics)
+                {
+                    var topicCopy = topic;
+                    var topicExpanded = _expandedTopics.Contains(topic.Name);
+                    <div class="tree-item topic-item @(IsTopicSelected(topic) ? "selected" : "")" @onclick="() => SelectTopic(topicCopy)">
+                        <span class="caret-sub" @onclick:stopPropagation @onclick="() => ToggleTopic(topicCopy.Name)">@(topicExpanded ? "▼" : "▶")</span>
+                        <span class="icon">📢</span>
+                        <span class="name">@topic.Name</span>
+                        <span class="sub-count">@topic.Subscriptions.Count subs</span>
+                    </div>
+                    @if (topicExpanded)
+                    {
+                        @foreach (var sub in topic.Subscriptions.Where(s => string.IsNullOrEmpty(_filter) || s.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            var subCopy = sub;
+                            <div class="tree-item sub-item @(IsSubSelected(sub) ? "selected" : "")" @onclick="() => SelectSub(subCopy)">
+                                <span class="icon">🔔</span>
+                                <span class="name">@sub.Name</span>
+                                @if (sub.ActiveMessageCount > 0)
+                                {
+                                    <span class="badge">@sub.ActiveMessageCount</span>
+                                }
+                                @if (sub.DeadLetterMessageCount > 0)
+                                {
+                                    <span class="badge badge-dl">DL:@sub.DeadLetterMessageCount</span>
+                                }
+                            </div>
+                        }
+                    }
+                }
+                @if (!FilteredTopics.Any())
+                {
+                    <div class="tree-empty">No topics match the filter</div>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public List<QueueInfo> Queues { get; set; } = new();
+    [Parameter] public List<TopicInfo> Topics { get; set; } = new();
+    [Parameter] public EventCallback<BusEntity> OnEntitySelected { get; set; }
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+
+    private string _filter = string.Empty;
+    private bool _queuesExpanded = true;
+    private bool _topicsExpanded = true;
+    private HashSet<string> _expandedTopics = new();
+    private BusEntity? _selected;
+
+    private List<QueueInfo> FilteredQueues => string.IsNullOrEmpty(_filter)
+        ? Queues
+        : Queues.Where(q => q.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    private List<TopicInfo> FilteredTopics => string.IsNullOrEmpty(_filter)
+        ? Topics
+        : Topics.Where(t => t.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)
+            || t.Subscriptions.Any(s => s.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase))).ToList();
+
+    private bool IsSelected(QueueInfo q) => _selected?.Type == BusEntityType.Queue && _selected.Name == q.Name;
+    private bool IsTopicSelected(TopicInfo t) => _selected?.Type == BusEntityType.Topic && _selected.Name == t.Name;
+    private bool IsSubSelected(SubscriptionInfo s) => _selected?.Type == BusEntityType.Subscription && _selected.Name == s.Name && _selected.TopicName == s.TopicName;
+
+    private void ToggleTopic(string topicName)
+    {
+        if (_expandedTopics.Contains(topicName)) _expandedTopics.Remove(topicName);
+        else _expandedTopics.Add(topicName);
+    }
+
+    private async Task SelectQueue(QueueInfo queue)
+    {
+        _selected = new BusEntity { Type = BusEntityType.Queue, Name = queue.Name };
+        await OnEntitySelected.InvokeAsync(_selected);
+    }
+
+    private async Task SelectTopic(TopicInfo topic)
+    {
+        _selected = new BusEntity { Type = BusEntityType.Topic, Name = topic.Name };
+        _expandedTopics.Add(topic.Name);
+        await OnEntitySelected.InvokeAsync(_selected);
+    }
+
+    private async Task SelectSub(SubscriptionInfo sub)
+    {
+        _selected = new BusEntity { Type = BusEntityType.Subscription, Name = sub.Name, TopicName = sub.TopicName };
+        await OnEntitySelected.InvokeAsync(_selected);
+    }
+}
