@@ -2,7 +2,9 @@
 
 A minimalist **Azure Service Bus Explorer** built with ASP.NET Core Blazor Server (.NET 10).
 
-Built with latest **Aspire 13.1.2** for local development orchestration.
+Built with latest **Aspire 13.1.2** for local development orchestration and **Microsoft FluentUI Blazor** for a dashboard UI inspired by the .NET Aspire Dashboard.
+
+![PicoBusX Dashboard](https://github.com/user-attachments/assets/cc13c01d-4860-4701-b6db-1b59db5968d3)
 
 ---
 
