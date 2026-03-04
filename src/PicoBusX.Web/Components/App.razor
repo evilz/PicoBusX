@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="@Assets["PicoBusX.Web.styles.css"]" />
     <ImportMap />
     <link rel="icon" type="image/png" href="favicon.png" />
-    <HeadOutlet @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
+    <HeadOutlet @rendermode="@(new InteractiveServerRenderMode(prerender: true))" />
     
     <!-- Make the body background dark if dark mode will be enabled to prevent a flash of white
          before fully rendered. This value is from --neutral-layer-2, but that custom
@@ -27,7 +27,7 @@
 </head>
 
 <body class="before-upgrade">
-<Routes @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
+<Routes @rendermode="@(new InteractiveServerRenderMode(prerender: true))" />
 
     <script src="_framework/blazor.web.js"></script>
 </body>
