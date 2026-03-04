@@ -1,6 +1,8 @@
 # PicoBusX 🚌
 
-A minimalist **Azure Service Bus Explorer** built with ASP.NET Core Blazor Server (.NET 9).
+A minimalist **Azure Service Bus Explorer** built with ASP.NET Core Blazor Server (.NET 10).
+
+Built with latest **Aspire 13.1.2** for local development orchestration.
 
 ---
 
@@ -16,12 +18,56 @@ A minimalist **Azure Service Bus Explorer** built with ASP.NET Core Blazor Serve
 
 ## Prerequisites
 
-- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) or later
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) or later
 - An Azure Service Bus namespace with a connection string (Standard or Premium tier)
+- (Optional) [Docker Desktop](https://www.docker.com/products/docker-desktop) for running with Aspire
 
 ---
 
 ## How to Run
+
+### Option 1: Using Aspire Host (Recommended for Development)
+
+Aspire automatically orchestrates PicoBusX with a local Azure Service Bus Emulator.
+
+**Prerequisites:**
+- Install [.NET Aspire workload](https://learn.microsoft.com/en-us/dotnet/aspire/setup-tooling?tabs=windows):
+  ```bash
+  dotnet workload install aspire
+  ```
+- Docker Desktop must be running
+
+**Features:**
+- 🚀 Automatic Service Bus Emulator orchestration
+- 📊 Real-time Aspire Dashboard at `http://localhost:4317`
+- 🔗 Automatic service discovery and connection string injection
+- 🔧 Client integration via `Aspire.Azure.Messaging.ServiceBus`
+- 📈 Built-in health checks and observability
+
+**Steps:**
+```bash
+# Clone the repository
+git clone https://github.com/evilz/PicoBusX.git
+cd PicoBusX
+
+# Set PicoBusX.AppHost as the startup project and run
+# (In Visual Studio / Rider: Select PicoBusX.AppHost and press F5)
+cd src/PicoBusX.AppHost
+dotnet run
+```
+
+The **Aspire Dashboard** will automatically open at `http://localhost:4317`, showing:
+- PicoBusX web app
+- Azure Service Bus Emulator status and logs
+- Real-time traces and observability data
+
+Then visit: **http://localhost:5000** (or the endpoint shown in dashboard)
+
+See [PicoBusX.AppHost README](./src/PicoBusX.AppHost/README.md) for more details on Aspire integrations and configuration.
+
+### Option 2: Manual Setup (Standalone)
+
+Use your own Azure Service Bus namespace or emulator.
 
 ```bash
 # Clone the repository
@@ -70,7 +116,12 @@ You can also set the connection string in `src/PicoBusX.Web/appsettings.json`:
 
 ```
 src/
-└── PicoBusX.Web/          # Blazor Server (.NET 9)
+├── PicoBusX.AppHost/          # Aspire Host (.NET 10)
+│   ├── Program.cs             # Aspire orchestration configuration
+│   ├── PicoBusX.AppHost.csproj
+│   └── README.md              # Detailed Aspire documentation
+│
+└── PicoBusX.Web/              # Blazor Server (.NET 10)
     ├── Components/
     │   ├── Pages/
     │   │   └── Home.razor             # Main dashboard (tree + details + send + peek)
@@ -96,6 +147,7 @@ src/
 
 ## Known Limits
 
+- **Azure Service Bus Emulator** - ✅ **Fully supported!** Port 5300 is now exposed for admin/management operations. All CRUD operations and entity management work with the emulator. See [PORT_5300_EXPOSED.md](./PORT_5300_EXPOSED.md) for details.
 - **No Azure AD / Managed Identity** support yet — only connection-string auth (SAS). AAD auth can be added by injecting `TokenCredential` into `ServiceBusClientFactory`.
 - **Peek is non-destructive** (uses `PeekMessages`). The "Receive" action uses PeekLock and immediately abandons messages after reading (non-destructive by default). Full consume is not available in this version.
 - **No dead-letter browser** — to peek DLQ, the entity path must be manually set to `<queue>/$DeadLetterQueue`.

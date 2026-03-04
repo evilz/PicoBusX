@@ -1,0 +1,5 @@
+﻿<Solution Format="1.0">
+  <Project Path="src/PicoBusX.AppHost/PicoBusX.AppHost.csproj" />
+  <Project Path="src/PicoBusX.Web/PicoBusX.Web.csproj" />
+</Solution>
+

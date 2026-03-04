@@ -4,17 +4,26 @@ using PicoBusX.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Options: ASB_CONNECTION_STRING env var takes priority over appsettings ServiceBus:ConnectionString
-// Environment variables are automatically loaded by WebApplication.CreateBuilder
+// Add Aspire Azure Messaging ServiceBus client integration
+// This automatically configures ServiceBusClient from the connection string
+builder.AddAzureServiceBusClient("serviceBus");
+
+// Options: ConnectionStrings:serviceBus (from Aspire) > ASB_CONNECTION_STRING env var > appsettings
+// When running under Aspire, the connection string is provided through service discovery
 builder.Services.Configure<ServiceBusConnectionOptions>(options =>
 {
-    options.ConnectionString = builder.Configuration["ASB_CONNECTION_STRING"]
-        ?? builder.Configuration["ServiceBus:ConnectionString"];
-    options.TransportType = builder.Configuration["ASB_TRANSPORT_TYPE"] ?? "AmqpTcp";
-    if (int.TryParse(builder.Configuration["ASB_ENTITY_MAX_PEEK"], out var maxPeek))
+    options.ConnectionString = builder.Configuration["ConnectionStrings:serviceBus"];
+    options.AdminUri = builder.Configuration["SERVICEBUS_ADMINURI"]; 
+    options.TransportType = builder.Configuration["ServiceBus:TransportType"] ?? "AmqpTcp";
+    if (int.TryParse(builder.Configuration["ServiceBus:EntityMaxPeek"], out var maxPeek))
         options.EntityMaxPeek = maxPeek;
     else
         options.EntityMaxPeek = 10;
+    
+    // Known entities from AppHost (for emulator fallback when listing operations aren't supported)
+    options.KnownQueues = builder.Configuration["SERVICEBUS_KNOWN_QUEUES"];
+    options.KnownTopics = builder.Configuration["SERVICEBUS_KNOWN_TOPICS"];
+    options.KnownSubscriptions = builder.Configuration["SERVICEBUS_KNOWN_SUBSCRIPTIONS"];
 });
 
 // Services

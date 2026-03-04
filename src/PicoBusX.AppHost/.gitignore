@@ -1,0 +1,27 @@
+﻿# Build results
+bin/
+obj/
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Local development
+appsettings.local.json
+
+# IDEs
+.vs/
+.vscode/
+.idea/
+*.sln.iml
+
+# Runtime
+*.log
+
+# Rider
+.idea/
+*.iml
+
