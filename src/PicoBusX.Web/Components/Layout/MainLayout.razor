@@ -1,20 +1,38 @@
 ﻿@inherits LayoutComponentBase
 
-<div class="layout-root">
-    <header class="app-header">
-        <div class="header-brand">
-            <span class="header-icon">🚌</span>
-            <span class="header-title">PicoBusX</span>
-            <span class="header-subtitle">Azure Service Bus Explorer</span>
-        </div>
-    </header>
-    <main class="app-main">
-        @Body
-    </main>
-</div>
+<FluentDesignTheme StorageName="theme" />
 
-<div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
-</div>
+<FluentLayout Class="aspire-shell">
+    <FluentHeader Class="aspire-header">
+        <FluentStack Orientation="Orientation.Horizontal"
+                     HorizontalGap="8"
+                     VerticalAlignment="VerticalAlignment.Center"
+                     aria-label="PicoBusX application branding">
+            <span class="aspire-logo" aria-hidden="true">🚌</span>
+            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="aspire-title">PicoBusX</FluentAnchor>
+            <span class="aspire-subtitle">Azure Service Bus Explorer</span>
+        </FluentStack>
+
+        <FluentSpacer />
+
+      
+        <FluentAnchor Appearance="Appearance.Stealth"
+                      Href="https://github.com/evilz/PicoBusX"
+                      Target="_blank"
+                      Rel="noreferrer noopener"
+                      Class="header-button"
+                      Title="PicoBusX repository"
+                      aria-label="PicoBusX repository">
+            <FluentIcon Value="@(new Icons.Regular.Size20.Code())" />
+        </FluentAnchor>
+    </FluentHeader>
+
+    <FluentBodyContent Class="aspire-body">
+        @Body
+    </FluentBodyContent>
+</FluentLayout>
+
+<FluentToastProvider MaxToastCount="3" Timeout="5000" />
+<FluentDialogProvider />
+<FluentTooltipProvider />
+<FluentMenuProvider />

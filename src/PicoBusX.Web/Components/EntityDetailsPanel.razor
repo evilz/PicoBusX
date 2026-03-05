@@ -8,56 +8,81 @@
             var q = Queues.FirstOrDefault(x => x.Name == Entity.Name);
             @if (q is not null)
             {
-                <table class="details-table">
-                    <tbody>
-                        <tr><th>Name</th><td>@q.Name</td></tr>
-                        <tr><th>Active Messages</th><td><span class="badge-count">@q.ActiveMessageCount</span></td></tr>
-                        <tr><th>Dead-Letter Messages</th><td><span class="badge-count badge-dl">@q.DeadLetterMessageCount</span></td></tr>
-                        <tr><th>Transfer DL Messages</th><td>@q.TransferDeadLetterMessageCount</td></tr>
-                        <tr><th>Size</th><td>@FormatSize(q.SizeInBytes)</td></tr>
-                        <tr><th>Max Size</th><td>@q.MaxSizeInMegabytes MB</td></tr>
-                        <tr><th>Lock Duration</th><td>@q.LockDuration</td></tr>
-                        <tr><th>Max Delivery Count</th><td>@q.MaxDeliveryCount</td></tr>
-                        <tr><th>Requires Session</th><td>@(q.RequiresSession ? "✅ Yes" : "No")</td></tr>
-                        <tr><th>Created At</th><td>@FormatDate(q.CreatedAt)</td></tr>
-                        <tr><th>Updated At</th><td>@FormatDate(q.UpdatedAt)</td></tr>
-                    </tbody>
-                </table>
+                <FluentCard Style="padding: 0; overflow: hidden;">
+                    <table class="details-table">
+                        <tbody>
+                            <tr><th>Name</th><td>@q.Name</td></tr>
+                            <tr>
+                                <th>Active Messages</th>
+                                <td><FluentBadge Appearance="Appearance.Accent">@q.ActiveMessageCount</FluentBadge></td>
+                            </tr>
+                            <tr>
+                                <th>Dead-Letter Messages</th>
+                                <td><FluentBadge Appearance="Appearance.Neutral" Style="background: #f59e0b; color: white;">@q.DeadLetterMessageCount</FluentBadge></td>
+                            </tr>
+                            <tr><th>Transfer DL Messages</th><td>@q.TransferDeadLetterMessageCount</td></tr>
+                            <tr><th>Size</th><td>@FormatSize(q.SizeInBytes)</td></tr>
+                            <tr><th>Max Size</th><td>@q.MaxSizeInMegabytes MB</td></tr>
+                            <tr><th>Lock Duration</th><td>@q.LockDuration</td></tr>
+                            <tr><th>Max Delivery Count</th><td>@q.MaxDeliveryCount</td></tr>
+                            <tr><th>Requires Session</th><td>@(q.RequiresSession ? "Yes" : "No")</td></tr>
+                            <tr><th>Created At</th><td>@FormatDate(q.CreatedAt)</td></tr>
+                            <tr><th>Updated At</th><td>@FormatDate(q.UpdatedAt)</td></tr>
+                        </tbody>
+                    </table>
+                </FluentCard>
             }
-            else { <p class="text-muted">Queue details not available.</p> }
+            else
+            {
+                <FluentMessageBar Intent="MessageIntent.Warning">Queue details not available.</FluentMessageBar>
+            }
         }
         else if (Entity.Type == BusEntityType.Topic)
         {
             var t = Topics.FirstOrDefault(x => x.Name == Entity.Name);
             @if (t is not null)
             {
-                <table class="details-table">
-                    <tbody>
-                        <tr><th>Name</th><td>@t.Name</td></tr>
-                        <tr><th>Subscriptions</th><td>@t.Subscriptions.Count</td></tr>
-                        <tr><th>Size</th><td>@FormatSize(t.SizeInBytes)</td></tr>
-                        <tr><th>Max Size</th><td>@t.MaxSizeInMegabytes MB</td></tr>
-                        <tr><th>Created At</th><td>@FormatDate(t.CreatedAt)</td></tr>
-                        <tr><th>Updated At</th><td>@FormatDate(t.UpdatedAt)</td></tr>
-                    </tbody>
-                </table>
-                <h4 style="margin-top:1rem">Subscriptions</h4>
-                <table class="details-table">
-                    <thead><tr><th>Name</th><th>Active</th><th>DL</th><th>Session</th></tr></thead>
-                    <tbody>
-                        @foreach (var s in t.Subscriptions)
-                        {
+                <FluentCard Style="padding: 0; overflow: hidden; margin-bottom: 1rem;">
+                    <table class="details-table">
+                        <tbody>
+                            <tr><th>Name</th><td>@t.Name</td></tr>
+                            <tr><th>Subscriptions</th><td>@t.Subscriptions.Count</td></tr>
+                            <tr><th>Size</th><td>@FormatSize(t.SizeInBytes)</td></tr>
+                            <tr><th>Max Size</th><td>@t.MaxSizeInMegabytes MB</td></tr>
+                            <tr><th>Created At</th><td>@FormatDate(t.CreatedAt)</td></tr>
+                            <tr><th>Updated At</th><td>@FormatDate(t.UpdatedAt)</td></tr>
+                        </tbody>
+                    </table>
+                </FluentCard>
+                <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.5rem;">Subscriptions</FluentLabel>
+                <FluentCard Style="padding: 0; overflow: hidden;">
+                    <table class="details-table">
+                        <thead>
                             <tr>
-                                <td>@s.Name</td>
-                                <td><span class="badge-count">@s.ActiveMessageCount</span></td>
-                                <td><span class="badge-count badge-dl">@s.DeadLetterMessageCount</span></td>
-                                <td>@(s.RequiresSession ? "✅" : "—")</td>
+                                <th>Name</th>
+                                <th>Active</th>
+                                <th>Dead-Letter</th>
+                                <th>Session</th>
                             </tr>
-                        }
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            @foreach (var s in t.Subscriptions)
+                            {
+                                <tr>
+                                    <td>@s.Name</td>
+                                    <td><FluentBadge Appearance="Appearance.Accent">@s.ActiveMessageCount</FluentBadge></td>
+                                    <td><FluentBadge Appearance="Appearance.Neutral" Style="background: #f59e0b; color: white;">@s.DeadLetterMessageCount</FluentBadge></td>
+                                    <td>@(s.RequiresSession ? "Yes" : "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </FluentCard>
             }
-            else { <p class="text-muted">Topic details not available.</p> }
+            else
+            {
+                <FluentMessageBar Intent="MessageIntent.Warning">Topic details not available.</FluentMessageBar>
+            }
         }
         else if (Entity.Type == BusEntityType.Subscription)
         {
@@ -65,21 +90,32 @@
             var s = t?.Subscriptions.FirstOrDefault(x => x.Name == Entity.Name);
             @if (s is not null)
             {
-                <table class="details-table">
-                    <tbody>
-                        <tr><th>Name</th><td>@s.Name</td></tr>
-                        <tr><th>Topic</th><td>@s.TopicName</td></tr>
-                        <tr><th>Active Messages</th><td><span class="badge-count">@s.ActiveMessageCount</span></td></tr>
-                        <tr><th>Dead-Letter Messages</th><td><span class="badge-count badge-dl">@s.DeadLetterMessageCount</span></td></tr>
-                        <tr><th>Lock Duration</th><td>@s.LockDuration</td></tr>
-                        <tr><th>Max Delivery Count</th><td>@s.MaxDeliveryCount</td></tr>
-                        <tr><th>Requires Session</th><td>@(s.RequiresSession ? "✅ Yes" : "No")</td></tr>
-                        <tr><th>Created At</th><td>@FormatDate(s.CreatedAt)</td></tr>
-                        <tr><th>Updated At</th><td>@FormatDate(s.UpdatedAt)</td></tr>
-                    </tbody>
-                </table>
+                <FluentCard Style="padding: 0; overflow: hidden;">
+                    <table class="details-table">
+                        <tbody>
+                            <tr><th>Name</th><td>@s.Name</td></tr>
+                            <tr><th>Topic</th><td>@s.TopicName</td></tr>
+                            <tr>
+                                <th>Active Messages</th>
+                                <td><FluentBadge Appearance="Appearance.Accent">@s.ActiveMessageCount</FluentBadge></td>
+                            </tr>
+                            <tr>
+                                <th>Dead-Letter Messages</th>
+                                <td><FluentBadge Appearance="Appearance.Neutral" Style="background: #f59e0b; color: white;">@s.DeadLetterMessageCount</FluentBadge></td>
+                            </tr>
+                            <tr><th>Lock Duration</th><td>@s.LockDuration</td></tr>
+                            <tr><th>Max Delivery Count</th><td>@s.MaxDeliveryCount</td></tr>
+                            <tr><th>Requires Session</th><td>@(s.RequiresSession ? "Yes" : "No")</td></tr>
+                            <tr><th>Created At</th><td>@FormatDate(s.CreatedAt)</td></tr>
+                            <tr><th>Updated At</th><td>@FormatDate(s.UpdatedAt)</td></tr>
+                        </tbody>
+                    </table>
+                </FluentCard>
             }
-            else { <p class="text-muted">Subscription details not available.</p> }
+            else
+            {
+                <FluentMessageBar Intent="MessageIntent.Warning">Subscription details not available.</FluentMessageBar>
+            }
         }
     </div>
 }

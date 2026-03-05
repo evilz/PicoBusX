@@ -6,6 +6,7 @@
 @inject MessageBrowserService Browser
 @inject Microsoft.Extensions.Options.IOptions<ServiceBusConnectionOptions> BusOptions
 @inject ILogger<Home> Logger
+@inject IToastService ToastService
 
 <PageTitle>PicoBusX – Azure Service Bus Explorer</PageTitle>
 
@@ -19,9 +20,13 @@
             IsLoading="@_loading"
             ErrorMessage="@_loadError" />
         <div class="tree-actions">
-            <button class="btn btn-sm btn-refresh" @onclick="LoadDataAsync" disabled="@_loading">
-                @if (_loading) { <span>⏳ Loading…</span> } else { <span>🔄 Refresh</span> }
-            </button>
+            <FluentButton Appearance="Appearance.Stealth" 
+                          IconStart="@(new Icons.Regular.Size16.ArrowSync())"
+                          OnClick="LoadDataAsync"
+                          Disabled="@_loading"
+                          Style="width: 100%;">
+                @if (_loading) { <span>Loading…</span> } else { <span>Refresh</span> }
+            </FluentButton>
         </div>
     </div>
 
@@ -35,72 +40,68 @@
                 <p>Select a queue, topic, or subscription from the tree to get started.</p>
                 @if (!string.IsNullOrEmpty(_connectionStatus))
                 {
-                    <div class="status-badge @(_isConnected ? "connected" : "disconnected")">
+                    <FluentBadge Appearance="@(_isConnected ? Appearance.Accent : Appearance.Neutral)"
+                                 Style="margin-top: 1rem; font-size: 0.875rem; padding: 0.5rem 1rem;">
                         @(_isConnected ? "✅ Connected" : "❌ Not Connected") — @_connectionStatus
-                    </div>
+                    </FluentBadge>
                 }
             </div>
         }
         else
         {
             <div class="entity-header">
-                <span class="entity-type-badge @_selectedEntity.Type.ToString().ToLower()">@_selectedEntity.Type</span>
-                <h2>@_selectedEntity.Name</h2>
+                <FluentBadge Appearance="Appearance.Accent" 
+                             BackgroundColor="@GetEntityColor(_selectedEntity.Type)"
+                             Color="white">
+                    @_selectedEntity.Type
+                </FluentBadge>
+                <h2 style="margin: 0; font-size: 1.3rem;">@_selectedEntity.Name</h2>
                 @if (_selectedEntity.TopicName is not null)
                 {
                     <span class="entity-parent">under @_selectedEntity.TopicName</span>
                 }
             </div>
 
-            <div class="tab-bar">
-                <button class="tab @(_activeTab == "details" ? "active" : "")" @onclick='() => _activeTab = "details"'>📋 Details</button>
+            <FluentTabs ActiveTabId="@_activeTab" OnTabChange="HandleTabChange">
+                <FluentTab Id="details" Label="Details" Icon="@(new Icons.Regular.Size16.List())">
+                    <EntityDetailsPanel Entity="@_selectedEntity" Queues="@_queues" Topics="@_topics" />
+                </FluentTab>
                 @if (_selectedEntity.Type != BusEntityType.Topic)
                 {
-                    <button class="tab @(_activeTab == "send" ? "active" : "")" @onclick='() => _activeTab = "send"'>📤 Send Message</button>
-                    <button class="tab @(_activeTab == "peek" ? "active" : "")" @onclick='() => _activeTab = "peek"'>👁️ Peek / Read</button>
+                    <FluentTab Id="send" Label="Send Message" Icon="@(new Icons.Regular.Size16.Send())">
+                        <JsonMessageEditor 
+                            Destination="@_selectedEntity.EntityPath"
+                            OnSend="HandleSendMessage"
+                            IsSending="@_sending"
+                            SendResult="@_sendResult"
+                            SendError="@_sendError" />
+                    </FluentTab>
+                    <FluentTab Id="peek" Label="Peek / Read" Icon="@(new Icons.Regular.Size16.Eye())">
+                        <PeekReadPanel 
+                            EntityPath="@_selectedEntity.EntityPath"
+                            DefaultMaxCount="@BusOptions.Value.EntityMaxPeek"
+                            OnPeek="HandlePeekAsync"
+                            OnReceive="HandleReceiveAsync"
+                            Messages="@_browsedMessages"
+                            IsBusy="@_browsing"
+                            ErrorMessage="@_browseError" />
+                    </FluentTab>
                 }
                 else
                 {
-                    <button class="tab @(_activeTab == "send" ? "active" : "")" @onclick='() => _activeTab = "send"'>📤 Send to Topic</button>
+                    <FluentTab Id="send" Label="Send to Topic" Icon="@(new Icons.Regular.Size16.Send())">
+                        <JsonMessageEditor 
+                            Destination="@_selectedEntity.EntityPath"
+                            OnSend="HandleSendMessage"
+                            IsSending="@_sending"
+                            SendResult="@_sendResult"
+                            SendError="@_sendError" />
+                    </FluentTab>
                 }
-            </div>
-
-            <div class="tab-content">
-                @if (_activeTab == "details")
-                {
-                    <EntityDetailsPanel Entity="@_selectedEntity" Queues="@_queues" Topics="@_topics" />
-                }
-                else if (_activeTab == "send")
-                {
-                    <JsonMessageEditor 
-                        Destination="@_selectedEntity.EntityPath"
-                        OnSend="HandleSendMessage"
-                        IsSending="@_sending"
-                        SendResult="@_sendResult"
-                        SendError="@_sendError" />
-                }
-                else if (_activeTab == "peek")
-                {
-                    <PeekReadPanel 
-                        EntityPath="@_selectedEntity.EntityPath"
-                        DefaultMaxCount="@BusOptions.Value.EntityMaxPeek"
-                        OnPeek="HandlePeekAsync"
-                        OnReceive="HandleReceiveAsync"
-                        Messages="@_browsedMessages"
-                        IsBusy="@_browsing"
-                        ErrorMessage="@_browseError" />
-                }
-            </div>
+            </FluentTabs>
         }
     </div>
 </div>
-
-@if (!string.IsNullOrEmpty(_toast))
-{
-    <div class="toast @(_toastType)" @onclick="() => _toast = string.Empty">
-        @_toast
-    </div>
-}
 
 @code {
     private List<QueueInfo> _queues = new();
@@ -119,9 +120,6 @@
     private List<BrowsedMessage> _browsedMessages = new();
     private bool _browsing;
     private string? _browseError;
-
-    private string _toast = string.Empty;
-    private string _toastType = "toast-info";
 
     protected override async Task OnInitializedAsync()
     {
@@ -164,6 +162,11 @@
         _browseError = null;
     }
 
+    private void HandleTabChange(FluentTab tab)
+    {
+        _activeTab = tab.Id ?? "details";
+    }
+
     private async Task HandleSendMessage(SendMessageRequest request)
     {
         _sending = true;
@@ -174,12 +177,13 @@
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             await Sender.SendMessageAsync(request, cts.Token);
-            _sendResult = "✅ Message sent successfully!";
-            ShowToast("Message sent!", "toast-success");
+            _sendResult = "Message sent successfully!";
+            ToastService.ShowSuccess("Message sent successfully!");
         }
         catch (Exception ex)
         {
             _sendError = ex.Message;
+            ToastService.ShowError($"Send failed: {ex.Message}");
             Logger.LogError(ex, "Failed to send message");
         }
         finally
@@ -232,23 +236,13 @@
         }
     }
 
-    private CancellationTokenSource? _toastCts;
-
-    private void ShowToast(string msg, string type = "toast-info")
+    private static string GetEntityColor(BusEntityType type) => type switch
     {
-        _toast = msg;
-        _toastType = type;
-        _toastCts?.Cancel();
-        _toastCts = new CancellationTokenSource();
-        var token = _toastCts.Token;
-        _ = Task.Delay(4000, token)
-            .ContinueWith(_ => { _toast = string.Empty; InvokeAsync(StateHasChanged); },
-                TaskContinuationOptions.OnlyOnRanToCompletion);
-    }
+        BusEntityType.Queue => "#1e40af",
+        BusEntityType.Topic => "#92400e",
+        BusEntityType.Subscription => "#065f46",
+        _ => "#1e40af"
+    };
 
-    public void Dispose()
-    {
-        _toastCts?.Cancel();
-        _toastCts?.Dispose();
-    }
+    public void Dispose() { }
 }

@@ -1,57 +1,69 @@
 @using PicoBusX.Web.Models
 
 <div class="peek-panel">
-    <div class="peek-controls">
-        <div class="form-group inline">
-            <label>Max Messages:</label>
-            <input type="number" @bind="_maxCount" min="1" max="500" class="form-control count-input" />
-        </div>
-        <button class="btn btn-peek" @onclick="DoPeek" disabled="@IsBusy">
-            @if (IsBusy) { <span>⏳</span> } else { <span>👁️ Peek</span> }
-        </button>
-        <button class="btn btn-receive" @onclick="DoReceive" disabled="@IsBusy">
-            @if (IsBusy) { <span>⏳</span> } else { <span>📥 Receive</span> }
-        </button>
-    </div>
+    <FluentCard Style="margin-bottom: 1rem;">
+        <FluentStack Orientation="Orientation.Horizontal" Style="align-items: flex-end; gap: 1rem; flex-wrap: wrap;">
+            <FluentNumberField Label="Max Messages"
+                               @bind-Value="_maxCount"
+                               Min="1"
+                               Max="500"
+                               Style="width: 120px;" />
+            <FluentButton Appearance="Appearance.Accent"
+                          IconStart="@(new Icons.Regular.Size16.Eye())"
+                          OnClick="DoPeek"
+                          Disabled="@IsBusy">
+                @if (IsBusy) { <span>Loading…</span> } else { <span>Peek</span> }
+            </FluentButton>
+            <FluentButton Appearance="Appearance.Outline"
+                          IconStart="@(new Icons.Regular.Size16.ArrowDownload())"
+                          OnClick="DoReceive"
+                          Disabled="@IsBusy">
+                @if (IsBusy) { <span>Loading…</span> } else { <span>Receive</span> }
+            </FluentButton>
+        </FluentStack>
+    </FluentCard>
 
     @if (!string.IsNullOrEmpty(ErrorMessage))
     {
-        <div class="error-banner">❌ @ErrorMessage</div>
+        <FluentMessageBar Intent="MessageIntent.Error" Style="margin-bottom: 1rem;">@ErrorMessage</FluentMessageBar>
     }
 
     @if (Messages.Any())
     {
-        <div class="messages-count">Showing @Messages.Count message(s)</div>
-        <div class="messages-list">
+        <div style="font-size: 0.8rem; color: var(--neutral-foreground-hint); margin-bottom: 0.5rem;">
+            Showing @Messages.Count message(s)
+        </div>
+        <FluentStack Orientation="Orientation.Vertical" Style="gap: 0.5rem;">
             @foreach (var (msg, idx) in Messages.Select((m, i) => (m, i)))
             {
                 var isExpanded = _expanded.Contains(idx);
-                <div class="message-card @(isExpanded ? "expanded" : "")">
-                    <div class="message-header" @onclick="() => ToggleMessage(idx)">
-                        <span class="msg-idx">#@(idx + 1)</span>
-                        <span class="msg-id">@(msg.MessageId ?? "—")</span>
-                        <span class="msg-time">@msg.EnqueuedTime.ToString("HH:mm:ss")</span>
+                <FluentCard Style="padding: 0; overflow: hidden;">
+                    <div class="message-header" @onclick="() => ToggleMessage(idx)" style="cursor: pointer; padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.75rem; user-select: none;">
+                        <span style="color: var(--neutral-foreground-hint); font-size: 0.75rem; min-width: 24px;">#@(idx + 1)</span>
+                        <span style="font-family: monospace; font-size: 0.8rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@(msg.MessageId ?? "—")</span>
+                        <span style="color: var(--neutral-foreground-hint); font-size: 0.78rem;">@msg.EnqueuedTime.ToString("HH:mm:ss")</span>
                         @if (!string.IsNullOrEmpty(msg.Subject))
                         {
-                            <span class="msg-subject">@msg.Subject</span>
+                            <FluentBadge Appearance="Appearance.Neutral" Style="font-size: 0.75rem;">@msg.Subject</FluentBadge>
                         }
-                        <span class="msg-delivery">DC:@msg.DeliveryCount</span>
-                        <span class="expand-icon">@(isExpanded ? "▲" : "▼")</span>
+                        <FluentBadge Appearance="Appearance.Neutral" Style="background: #f59e0b; color: white; font-size: 0.75rem;">DC:@msg.DeliveryCount</FluentBadge>
+                        <FluentIcon Value="@(isExpanded ? (Icon)new Icons.Regular.Size16.ChevronUp() : new Icons.Regular.Size16.ChevronDown())" Style="color: var(--neutral-foreground-hint);" />
                     </div>
                     @if (isExpanded)
                     {
-                        <div class="message-body">
-                            <div class="message-meta">
+                        <FluentDivider />
+                        <div style="padding: 1rem;">
+                            <FluentStack Orientation="Orientation.Horizontal" Style="flex-wrap: wrap; gap: 0.75rem; font-size: 0.8rem; margin-bottom: 0.75rem; background: var(--neutral-fill-rest); padding: 0.5rem; border-radius: 4px;">
                                 @if (!string.IsNullOrEmpty(msg.SessionId)) { <span><strong>SessionId:</strong> @msg.SessionId</span> }
                                 @if (!string.IsNullOrEmpty(msg.CorrelationId)) { <span><strong>CorrelationId:</strong> @msg.CorrelationId</span> }
                                 @if (!string.IsNullOrEmpty(msg.ContentType)) { <span><strong>ContentType:</strong> @msg.ContentType</span> }
                                 <span><strong>Enqueued:</strong> @msg.EnqueuedTime.ToString("yyyy-MM-dd HH:mm:ss zzz")</span>
-                            </div>
+                            </FluentStack>
 
                             @if (msg.ApplicationProperties.Any())
                             {
-                                <div class="app-props">
-                                    <strong>Application Properties:</strong>
+                                <div style="margin-bottom: 0.75rem; font-size: 0.85rem;">
+                                    <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">Application Properties</FluentLabel>
                                     <table class="details-table">
                                         <tbody>
                                             @foreach (var kv in msg.ApplicationProperties)
@@ -63,19 +75,21 @@
                                 </div>
                             }
 
-                            <div class="msg-body-section">
-                                <strong>Body:</strong>
+                            <div>
+                                <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">Body</FluentLabel>
                                 <pre class="body-pre">@PrettyPrint(msg.Body)</pre>
                             </div>
                         </div>
                     }
-                </div>
+                </FluentCard>
             }
-        </div>
+        </FluentStack>
     }
     else if (!IsBusy && string.IsNullOrEmpty(ErrorMessage))
     {
-        <div class="empty-state-small">Use Peek to preview messages (non-destructive) or Receive to consume them.</div>
+        <FluentCard Style="text-align: center; padding: 2rem; color: var(--neutral-foreground-hint);">
+            Use Peek to preview messages (non-destructive) or Receive to consume them.
+        </FluentCard>
     }
 </div>
 
