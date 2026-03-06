@@ -81,7 +81,8 @@ public class MessageBrowserService
 
         var newMessage = new ServiceBusMessage(target.Body)
         {
-            ContentType = target.ContentType
+            ContentType = target.ContentType,
+            MessageId = target.MessageId
         };
         if (!string.IsNullOrEmpty(target.Subject)) newMessage.Subject = target.Subject;
         if (!string.IsNullOrEmpty(target.CorrelationId)) newMessage.CorrelationId = target.CorrelationId;

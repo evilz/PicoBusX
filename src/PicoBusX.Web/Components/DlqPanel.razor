@@ -92,7 +92,7 @@
     else if (!IsBusy && string.IsNullOrEmpty(ErrorMessage))
     {
         <FluentCard Style="text-align: center; padding: 2rem; color: var(--neutral-foreground-hint);">
-            <div>☠️</div>
+            <div aria-hidden="true">☠️</div>
             <div>No dead-letter messages. Use Peek DLQ to check.</div>
         </FluentCard>
     }
