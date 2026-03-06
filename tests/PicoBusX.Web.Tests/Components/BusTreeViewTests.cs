@@ -183,6 +183,7 @@ public class BusTreeViewTests : TestContext
     private static Task InvokePrivateMethod<TComponent>(TComponent instance, string methodName, params object[] args)
     {
         var method = typeof(TComponent).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)!;
-        return (Task)method.Invoke(instance, args)!;
+        var result = method.Invoke(instance, args);
+        return result is Task task ? task : Task.CompletedTask;
     }
 }

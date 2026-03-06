@@ -186,7 +186,6 @@ public class EntityDetailsPanelTests : TestContext
             .Add(p => p.Queues, [])
             .Add(p => p.Topics, []));
 
-        cut.Markup.Should().NotContain("details-panel");
         cut.Markup.Trim().Should().BeEmpty();
     }
 }
