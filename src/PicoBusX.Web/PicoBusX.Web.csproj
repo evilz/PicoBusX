@@ -60,4 +60,10 @@
     <_ContentIncludedByDefault Remove="wwwroot\lib\bootstrap\dist\js\bootstrap.min.js.map" />
   </ItemGroup>
 
+  <!-- .NET SDK Container Publishing support -->
+  <!-- Use: dotnet publish -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -->
+  <PropertyGroup>
+    <ContainerImageName>picobusx</ContainerImageName>
+  </PropertyGroup>
+
 </Project>

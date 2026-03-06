@@ -1,4 +1,205 @@
-# PicoBusX 🚌
+# PicoBusX
+
+PicoBusX is a Blazor Server web application for exploring Azure Service Bus — browse namespaces, queues, topics, and subscriptions, peek messages, and inspect entity metadata through a clean FluentUI interface.
+
+## Features
+
+- Browse Azure Service Bus queues, topics, and subscriptions
+- Peek and inspect messages with full metadata
+- Built with ASP.NET Core Blazor Server (.NET 10) and Microsoft FluentUI components
+- Azure Service Bus integration via [.NET Aspire](https://aka.ms/dotnet-aspire)
+
+## Getting Started
+
+### Prerequisites
+
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- An Azure Service Bus namespace (Standard or Premium tier)
+
+### Run locally
+
+```bash
+# Clone the repo
+git clone https://github.com/evilz/PicoBusX.git
+cd PicoBusX
+
+# Set your connection string (user secrets or environment variable)
+dotnet user-secrets set "ConnectionStrings:AzureServiceBus" "<your-connection-string>" \
+  --project src/PicoBusX.Web/PicoBusX.Web.csproj
+
+# Start the app
+dotnet run --project src/PicoBusX.Web/PicoBusX.Web.csproj
+```
+
+Then open [https://localhost:7274](https://localhost:7274).
+
+### Run tests
+
+```bash
+dotnet test tests/PicoBusX.Web.Tests/PicoBusX.Web.Tests.csproj
+```
+
+## CI/CD Pipeline
+
+The project uses GitHub Actions to **build**, **test**, and **publish a Docker image** to GitHub Container Registry (`ghcr.io`) on every push to `main`.
+
+### Setup – create these three files
+
+#### 1. `.github/workflows/ci.yml`
+
+```yaml
+name: CI/CD
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore – web project
+        run: dotnet restore src/PicoBusX.Web/PicoBusX.Web.csproj
+
+      - name: Restore – test project
+        run: dotnet restore tests/PicoBusX.Web.Tests/PicoBusX.Web.Tests.csproj
+
+      - name: Build
+        run: dotnet build src/PicoBusX.Web/PicoBusX.Web.csproj --no-restore -c Release
+
+      - name: Test
+        run: |
+          dotnet test tests/PicoBusX.Web.Tests/PicoBusX.Web.Tests.csproj \
+            --no-restore \
+            -c Release \
+            --logger "trx;LogFileName=test-results.trx" \
+            --results-directory TestResults
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: TestResults/
+          retention-days: 7
+
+  docker:
+    name: Docker Build & Push
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+```
+
+#### 2. `Dockerfile` (at repository root)
+
+```dockerfile
+# Stage 1 – build & publish
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+COPY . .
+RUN dotnet restore src/PicoBusX.Web/PicoBusX.Web.csproj
+
+RUN dotnet publish src/PicoBusX.Web/PicoBusX.Web.csproj \
+    --no-restore \
+    -c Release \
+    -o /app/publish
+
+# Stage 2 – runtime image
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+WORKDIR /app
+EXPOSE 8080
+EXPOSE 8081
+COPY --from=build /app/publish .
+ENTRYPOINT ["dotnet", "PicoBusX.Web.dll"]
+```
+
+#### 3. `.dockerignore` (at repository root)
+
+```
+.github/
+.git/
+.vs/
+.vscode/
+**/bin/
+**/obj/
+**/TestResults/
+tests/
+*.md
+.gitignore
+.gitattributes
+**/*.user
+```
+
+### Run the Docker image
+
+```bash
+docker run \
+  -e ConnectionStrings__AzureServiceBus="<your-connection-string>" \
+  -p 8080:8080 \
+  ghcr.io/evilz/picobusx:latest
+```
+
+## Contributing
+
+Contributions are welcome! Open an issue or submit a pull request.
+
+## License
+
+MIT
+🚌
 
 A minimalist **Azure Service Bus Explorer** built with ASP.NET Core Blazor Server (.NET 10).
 
