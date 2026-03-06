@@ -9,4 +9,5 @@ public class SendMessageRequest
     public string? CorrelationId { get; set; }
     public string? SessionId { get; set; }
     public Dictionary<string, string>? ApplicationProperties { get; set; }
+    public DateTimeOffset? ScheduledEnqueueTime { get; set; }
 }

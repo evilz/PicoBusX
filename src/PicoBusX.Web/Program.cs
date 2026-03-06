@@ -18,9 +18,10 @@ builder.Services.AddOptions<ServiceBusConnectionOptions>()
 
 // Services
 builder.Services.AddSingleton<ServiceBusClientFactory>();
-builder.Services.AddScoped<ExplorerService>();
+builder.Services.AddScoped<IExplorerService, ExplorerService>();
 builder.Services.AddScoped<MessageSenderService>();
 builder.Services.AddScoped<MessageBrowserService>();
+builder.Services.AddScoped<EntityManagementService>();
 
 // Add Fluent UI Blazor services
 builder.Services.AddFluentUIComponents();
@@ -40,6 +41,8 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseAntiforgery();
+
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
