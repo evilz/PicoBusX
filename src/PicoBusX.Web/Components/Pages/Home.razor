@@ -1,7 +1,7 @@
 ﻿@page "/"
 @rendermode InteractiveServer
 @implements IDisposable
-@inject ExplorerService Explorer
+@inject IExplorerService Explorer
 @inject MessageSenderService Sender
 @inject MessageBrowserService Browser
 @inject EntityManagementService EntityManager
@@ -19,7 +19,8 @@
             Topics="@_topics" 
             OnEntitySelected="HandleEntitySelected"
             IsLoading="@_loading"
-            ErrorMessage="@_loadError" />
+            ErrorMessage="@_loadError"
+            WarningMessage="@_loadWarning" />
         <div class="tree-actions">
             <FluentButton Appearance="Appearance.Outline"
                           IconStart="@(new Icons.Regular.Size16.Add())"
@@ -215,6 +216,7 @@
     private string _activeTab = "details";
     private bool _loading;
     private string? _loadError;
+    private string? _loadWarning;
     private bool _isConnected;
     private string _connectionStatus = string.Empty;
 
@@ -254,13 +256,34 @@
     {
         _loading = true;
         _loadError = null;
+        _loadWarning = null;
         _isConnected = false;
         StateHasChanged();
+
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            _queues = await Explorer.GetQueuesAsync(cts.Token);
-            _topics = await Explorer.GetTopicsAsync(cts.Token);
+            var loadResult = await Explorer.LoadAsync(cts.Token);
+
+            _queues = loadResult.Queues;
+            _topics = loadResult.Topics;
+            _loadWarning = loadResult.WarningMessage;
+            _loadError = loadResult.ErrorMessage;
+
+            RestoreSelectionAfterReload();
+
+            if (loadResult.HasError)
+            {
+                _connectionStatus = loadResult.ErrorMessage!;
+                return;
+            }
+
+            if (loadResult.HasWarning)
+            {
+                _connectionStatus = loadResult.WarningMessage!;
+                return;
+            }
+
             _isConnected = true;
             _connectionStatus = $"Loaded {_queues.Count} queues, {_topics.Count} topics";
         }
@@ -497,6 +520,27 @@
         finally
         {
             _deletingEntity = false;
+        }
+    }
+
+    private void RestoreSelectionAfterReload()
+    {
+        if (_selectedEntity is null)
+        {
+            return;
+        }
+
+        var queueExists = _selectedEntity.Type == BusEntityType.Queue && _queues.Any(q => q.Name == _selectedEntity.Name);
+        var topicExists = _selectedEntity.Type == BusEntityType.Topic && _topics.Any(t => t.Name == _selectedEntity.Name);
+        var subscriptionExists = _selectedEntity.Type == BusEntityType.Subscription &&
+                                 _topics.Any(t => t.Name == _selectedEntity.TopicName && t.Subscriptions.Any(s => s.Name == _selectedEntity.Name));
+
+        if (!queueExists && !topicExists && !subscriptionExists)
+        {
+            _selectedEntity = null;
+            _activeTab = "details";
+            _browsedMessages.Clear();
+            _dlqMessages.Clear();
         }
     }
 

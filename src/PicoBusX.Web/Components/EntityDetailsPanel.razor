@@ -1,3 +1,4 @@
+@using PicoBusX.Web.Formatting
 @using PicoBusX.Web.Models
 
 @if (Entity is not null)
@@ -5,29 +6,19 @@
     <div class="details-panel">
         @if (Entity.Type == BusEntityType.Queue)
         {
-            var q = Queues.FirstOrDefault(x => x.Name == Entity.Name);
-            @if (q is not null)
+            var queue = Queues.FirstOrDefault(x => x.Name == Entity.Name);
+            @if (queue is not null)
             {
                 <FluentCard Style="padding: 0; overflow: hidden;">
                     <table class="details-table">
                         <tbody>
-                            <tr><th>Name</th><td>@q.Name</td></tr>
-                            <tr>
-                                <th>Active Messages</th>
-                                <td><FluentBadge Appearance="Appearance.Accent">@q.ActiveMessageCount</FluentBadge></td>
-                            </tr>
-                            <tr>
-                                <th>Dead-Letter Messages</th>
-                                <td><FluentBadge Appearance="Appearance.Neutral" Style="background: #f59e0b; color: white;">@q.DeadLetterMessageCount</FluentBadge></td>
-                            </tr>
-                            <tr><th>Transfer DL Messages</th><td>@q.TransferDeadLetterMessageCount</td></tr>
-                            <tr><th>Size</th><td>@FormatSize(q.SizeInBytes)</td></tr>
-                            <tr><th>Max Size</th><td>@q.MaxSizeInMegabytes MB</td></tr>
-                            <tr><th>Lock Duration</th><td>@q.LockDuration</td></tr>
-                            <tr><th>Max Delivery Count</th><td>@q.MaxDeliveryCount</td></tr>
-                            <tr><th>Requires Session</th><td>@(q.RequiresSession ? "Yes" : "No")</td></tr>
-                            <tr><th>Created At</th><td>@FormatDate(q.CreatedAt)</td></tr>
-                            <tr><th>Updated At</th><td>@FormatDate(q.UpdatedAt)</td></tr>
+                            @foreach (var row in BuildQueueRows(queue))
+                            {
+                                <tr>
+                                    <th>@row.Label</th>
+                                    <td>@row.Value</td>
+                                </tr>
+                            }
                         </tbody>
                     </table>
                 </FluentCard>
@@ -39,41 +30,58 @@
         }
         else if (Entity.Type == BusEntityType.Topic)
         {
-            var t = Topics.FirstOrDefault(x => x.Name == Entity.Name);
-            @if (t is not null)
+            var topic = Topics.FirstOrDefault(x => x.Name == Entity.Name);
+            @if (topic is not null)
             {
                 <FluentCard Style="padding: 0; overflow: hidden; margin-bottom: 1rem;">
                     <table class="details-table">
                         <tbody>
-                            <tr><th>Name</th><td>@t.Name</td></tr>
-                            <tr><th>Subscriptions</th><td>@t.Subscriptions.Count</td></tr>
-                            <tr><th>Size</th><td>@FormatSize(t.SizeInBytes)</td></tr>
-                            <tr><th>Max Size</th><td>@t.MaxSizeInMegabytes MB</td></tr>
-                            <tr><th>Created At</th><td>@FormatDate(t.CreatedAt)</td></tr>
-                            <tr><th>Updated At</th><td>@FormatDate(t.UpdatedAt)</td></tr>
+                            @foreach (var row in BuildTopicRows(topic))
+                            {
+                                <tr>
+                                    <th>@row.Label</th>
+                                    <td>@row.Value</td>
+                                </tr>
+                            }
                         </tbody>
                     </table>
                 </FluentCard>
-                <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.5rem;">Subscriptions</FluentLabel>
+
+                <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.5rem;">Subscriptions summary</FluentLabel>
                 <FluentCard Style="padding: 0; overflow: hidden;">
                     <table class="details-table">
                         <thead>
                             <tr>
                                 <th>Name</th>
                                 <th>Active</th>
-                                <th>Dead-Letter</th>
-                                <th>Session</th>
+                                <th>DLQ</th>
+                                <th>Transfer</th>
+                                <th>Transfer DLQ</th>
+                                <th>Sessions</th>
+                                <th>Status</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var s in t.Subscriptions)
+                            @if (topic.Subscriptions.Count == 0)
                             {
                                 <tr>
-                                    <td>@s.Name</td>
-                                    <td><FluentBadge Appearance="Appearance.Accent">@s.ActiveMessageCount</FluentBadge></td>
-                                    <td><FluentBadge Appearance="Appearance.Neutral" Style="background: #f59e0b; color: white;">@s.DeadLetterMessageCount</FluentBadge></td>
-                                    <td>@(s.RequiresSession ? "Yes" : "—")</td>
+                                    <td colspan="7">—</td>
                                 </tr>
+                            }
+                            else
+                            {
+                                @foreach (var subscription in topic.Subscriptions)
+                                {
+                                    <tr>
+                                        <td>@subscription.Name</td>
+                                        <td>@subscription.ActiveMessageCount</td>
+                                        <td>@subscription.DeadLetterMessageCount</td>
+                                        <td>@subscription.TransferMessageCount</td>
+                                        <td>@subscription.TransferDeadLetterMessageCount</td>
+                                        <td>@EntityDisplayFormatter.FormatBoolean(subscription.RequiresSession)</td>
+                                        <td>@EntityDisplayFormatter.FormatText(subscription.Status)</td>
+                                    </tr>
+                                }
                             }
                         </tbody>
                     </table>
@@ -86,28 +94,20 @@
         }
         else if (Entity.Type == BusEntityType.Subscription)
         {
-            var t = Topics.FirstOrDefault(x => x.Name == Entity.TopicName);
-            var s = t?.Subscriptions.FirstOrDefault(x => x.Name == Entity.Name);
-            @if (s is not null)
+            var topic = Topics.FirstOrDefault(x => x.Name == Entity.TopicName);
+            var subscription = topic?.Subscriptions.FirstOrDefault(x => x.Name == Entity.Name);
+            @if (subscription is not null)
             {
                 <FluentCard Style="padding: 0; overflow: hidden;">
                     <table class="details-table">
                         <tbody>
-                            <tr><th>Name</th><td>@s.Name</td></tr>
-                            <tr><th>Topic</th><td>@s.TopicName</td></tr>
-                            <tr>
-                                <th>Active Messages</th>
-                                <td><FluentBadge Appearance="Appearance.Accent">@s.ActiveMessageCount</FluentBadge></td>
-                            </tr>
-                            <tr>
-                                <th>Dead-Letter Messages</th>
-                                <td><FluentBadge Appearance="Appearance.Neutral" Style="background: #f59e0b; color: white;">@s.DeadLetterMessageCount</FluentBadge></td>
-                            </tr>
-                            <tr><th>Lock Duration</th><td>@s.LockDuration</td></tr>
-                            <tr><th>Max Delivery Count</th><td>@s.MaxDeliveryCount</td></tr>
-                            <tr><th>Requires Session</th><td>@(s.RequiresSession ? "Yes" : "No")</td></tr>
-                            <tr><th>Created At</th><td>@FormatDate(s.CreatedAt)</td></tr>
-                            <tr><th>Updated At</th><td>@FormatDate(s.UpdatedAt)</td></tr>
+                            @foreach (var row in BuildSubscriptionRows(subscription))
+                            {
+                                <tr>
+                                    <th>@row.Label</th>
+                                    <td>@row.Value</td>
+                                </tr>
+                            }
                         </tbody>
                     </table>
                 </FluentCard>
@@ -125,14 +125,84 @@
     [Parameter] public List<QueueInfo> Queues { get; set; } = new();
     [Parameter] public List<TopicInfo> Topics { get; set; } = new();
 
-    private static string FormatSize(long bytes)
+    private sealed record DetailRow(string Label, string Value);
+
+    private static IReadOnlyList<DetailRow> BuildQueueRows(QueueInfo queue)
     {
-        if (bytes == 0) return "0 B";
-        if (bytes < 1024) return $"{bytes} B";
-        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
-        if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024):F1} MB";
-        return $"{bytes / (1024.0 * 1024 * 1024):F2} GB";
+        return
+        [
+            new("Name", queue.Name),
+            new("Active Messages", queue.ActiveMessageCount.ToString()),
+            new("Dead-Letter Messages", queue.DeadLetterMessageCount.ToString()),
+            new("Transfer Dead-Letter Messages", queue.TransferDeadLetterMessageCount.ToString()),
+            new("Scheduled Messages", queue.ScheduledMessageCount.ToString()),
+            new("Transfer Messages", queue.TransferMessageCount.ToString()),
+            new("Size", EntityDisplayFormatter.FormatSize(queue.SizeInBytes)),
+            new("Created At", EntityDisplayFormatter.FormatDate(queue.CreatedAt)),
+            new("Updated At", EntityDisplayFormatter.FormatDate(queue.UpdatedAt)),
+            new("Accessed At", EntityDisplayFormatter.FormatDate(queue.AccessedAt)),
+            new("Lock Duration", EntityDisplayFormatter.FormatTimeSpan(queue.LockDuration)),
+            new("Max Delivery Count", queue.MaxDeliveryCount.ToString()),
+            new("Requires Session", EntityDisplayFormatter.FormatBoolean(queue.RequiresSession)),
+            new("Max Size", EntityDisplayFormatter.FormatMegabytes(queue.MaxSizeInMegabytes)),
+            new("Default Message TTL", EntityDisplayFormatter.FormatTimeSpan(queue.DefaultMessageTimeToLive)),
+            new("Auto Delete On Idle", EntityDisplayFormatter.FormatTimeSpan(queue.AutoDeleteOnIdle)),
+            new("Enable Partitioning", EntityDisplayFormatter.FormatBoolean(queue.EnablePartitioning)),
+            new("Enable Batched Operations", EntityDisplayFormatter.FormatBoolean(queue.EnableBatchedOperations)),
+            new("Forward To", EntityDisplayFormatter.FormatText(queue.ForwardTo)),
+            new("Forward Dead-Lettered Messages To", EntityDisplayFormatter.FormatText(queue.ForwardDeadLetteredMessagesTo)),
+            new("Dead-Letter On Message Expiration", EntityDisplayFormatter.FormatBoolean(queue.DeadLetteringOnMessageExpiration)),
+            new("Status", EntityDisplayFormatter.FormatText(queue.Status))
+        ];
     }
 
-    private static string FormatDate(DateTimeOffset? dt) => dt.HasValue ? dt.Value.ToString("yyyy-MM-dd HH:mm:ss zzz") : "—";
+    private static IReadOnlyList<DetailRow> BuildTopicRows(TopicInfo topic)
+    {
+        return
+        [
+            new("Name", topic.Name),
+            new("Size", EntityDisplayFormatter.FormatSize(topic.SizeInBytes)),
+            new("Scheduled Messages", topic.ScheduledMessageCount.ToString()),
+            new("Created At", EntityDisplayFormatter.FormatDate(topic.CreatedAt)),
+            new("Updated At", EntityDisplayFormatter.FormatDate(topic.UpdatedAt)),
+            new("Accessed At", EntityDisplayFormatter.FormatDate(topic.AccessedAt)),
+            new("Max Size", EntityDisplayFormatter.FormatMegabytes(topic.MaxSizeInMegabytes)),
+            new("Default Message TTL", EntityDisplayFormatter.FormatTimeSpan(topic.DefaultMessageTimeToLive)),
+            new("Auto Delete On Idle", EntityDisplayFormatter.FormatTimeSpan(topic.AutoDeleteOnIdle)),
+            new("Enable Partitioning", EntityDisplayFormatter.FormatBoolean(topic.EnablePartitioning)),
+            new("Enable Batched Operations", EntityDisplayFormatter.FormatBoolean(topic.EnableBatchedOperations)),
+            new("Support Ordering", EntityDisplayFormatter.FormatBoolean(topic.SupportOrdering)),
+            new("Duplicate Detection History Window", EntityDisplayFormatter.FormatTimeSpan(topic.DuplicateDetectionHistoryTimeWindow)),
+            new("Requires Duplicate Detection", EntityDisplayFormatter.FormatBoolean(topic.RequiresDuplicateDetection)),
+            new("Status", EntityDisplayFormatter.FormatText(topic.Status)),
+            new("Subscriptions", topic.Subscriptions.Count.ToString())
+        ];
+    }
+
+    private static IReadOnlyList<DetailRow> BuildSubscriptionRows(SubscriptionInfo subscription)
+    {
+        return
+        [
+            new("Topic", subscription.TopicName),
+            new("Name", subscription.Name),
+            new("Active Messages", subscription.ActiveMessageCount.ToString()),
+            new("Dead-Letter Messages", subscription.DeadLetterMessageCount.ToString()),
+            new("Transfer Messages", subscription.TransferMessageCount.ToString()),
+            new("Transfer Dead-Letter Messages", subscription.TransferDeadLetterMessageCount.ToString()),
+            new("Created At", EntityDisplayFormatter.FormatDate(subscription.CreatedAt)),
+            new("Updated At", EntityDisplayFormatter.FormatDate(subscription.UpdatedAt)),
+            new("Accessed At", EntityDisplayFormatter.FormatDate(subscription.AccessedAt)),
+            new("Lock Duration", EntityDisplayFormatter.FormatTimeSpan(subscription.LockDuration)),
+            new("Max Delivery Count", subscription.MaxDeliveryCount.ToString()),
+            new("Requires Session", EntityDisplayFormatter.FormatBoolean(subscription.RequiresSession)),
+            new("Default Message TTL", EntityDisplayFormatter.FormatTimeSpan(subscription.DefaultMessageTimeToLive)),
+            new("Auto Delete On Idle", EntityDisplayFormatter.FormatTimeSpan(subscription.AutoDeleteOnIdle)),
+            new("Enable Batched Operations", EntityDisplayFormatter.FormatBoolean(subscription.EnableBatchedOperations)),
+            new("Dead-Letter On Message Expiration", EntityDisplayFormatter.FormatBoolean(subscription.DeadLetteringOnMessageExpiration)),
+            new("Dead-Letter On Filter Evaluation Exceptions", EntityDisplayFormatter.FormatBoolean(subscription.DeadLetteringOnFilterEvaluationExceptions)),
+            new("Forward To", EntityDisplayFormatter.FormatText(subscription.ForwardTo)),
+            new("Forward Dead-Lettered Messages To", EntityDisplayFormatter.FormatText(subscription.ForwardDeadLetteredMessagesTo)),
+            new("Status", EntityDisplayFormatter.FormatText(subscription.Status))
+        ];
+    }
 }

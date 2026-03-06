@@ -2,8 +2,9 @@
 
 <div class="tree-panel">
     <div class="tree-search">
-        <FluentSearch Placeholder="Filter..."
+        <FluentSearch Placeholder="Filter entities"
                       @bind-Value="_filter"
+                      aria-label="Filter entities"
                       Style="width: 100%;" />
     </div>
 
@@ -22,7 +23,14 @@
     }
     else
     {
-        <FluentTreeView>
+        @if (!string.IsNullOrEmpty(WarningMessage))
+        {
+            <FluentMessageBar Intent="MessageIntent.Warning" Style="margin: 0.5rem;">
+                @WarningMessage
+            </FluentMessageBar>
+        }
+
+        <FluentTreeView aria-label="Service Bus entity explorer">
             <FluentTreeItem Expanded="@_queuesExpanded"
                             OnExpandCollapse="e => _queuesExpanded = e.Expanded">
                 <ChildContent>
@@ -57,14 +65,16 @@
                     @foreach (var topic in FilteredTopics)
                     {
                         var topicExpanded = _expandedTopics.Contains(topic.Name);
+                        var filteredSubscriptions = GetFilteredSubscriptions(topic);
+
                         <FluentTreeItem Selected="@IsTopicSelected(topic)"
                                         Expanded="@topicExpanded"
                                         OnExpandCollapse="e => OnTopicExpandCollapse(topic.Name, e.Expanded)"
                                         OnClick="() => SelectTopic(topic)">
                             <ChildContent>
                                 <span class="tree-item-label">@topic.Name</span>
-                                <span style="font-size: 0.72rem; opacity: 0.6; margin-left: 0.4rem;">@topic.Subscriptions.Count subs</span>
-                                @foreach (var sub in topic.Subscriptions.Where(s => string.IsNullOrEmpty(_filter) || s.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)))
+                                <span style="font-size: 0.72rem; opacity: 0.6; margin-left: 0.4rem;">@filteredSubscriptions.Count subs</span>
+                                @foreach (var sub in filteredSubscriptions)
                                 {
                                     <FluentTreeItem Selected="@IsSubSelected(sub)" OnClick="() => SelectSub(sub)">
                                         <ChildContent>
@@ -99,11 +109,12 @@
     [Parameter] public EventCallback<BusEntity> OnEntitySelected { get; set; }
     [Parameter] public bool IsLoading { get; set; }
     [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public string? WarningMessage { get; set; }
 
     private string _filter = string.Empty;
     private bool _queuesExpanded = true;
     private bool _topicsExpanded = true;
-    private HashSet<string> _expandedTopics = new();
+    private readonly HashSet<string> _expandedTopics = new();
     private BusEntity? _selected;
 
     private List<QueueInfo> FilteredQueues => string.IsNullOrEmpty(_filter)
@@ -113,7 +124,15 @@
     private List<TopicInfo> FilteredTopics => string.IsNullOrEmpty(_filter)
         ? Topics
         : Topics.Where(t => t.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)
-            || t.Subscriptions.Any(s => s.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase))).ToList();
+                            || t.Subscriptions.Any(s => s.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+    private List<SubscriptionInfo> GetFilteredSubscriptions(TopicInfo topic)
+    {
+        return string.IsNullOrEmpty(_filter)
+            ? topic.Subscriptions
+            : topic.Subscriptions.Where(s => s.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
 
     private bool IsSelected(QueueInfo q) => _selected?.Type == BusEntityType.Queue && _selected.Name == q.Name;
     private bool IsTopicSelected(TopicInfo t) => _selected?.Type == BusEntityType.Topic && _selected.Name == t.Name;
@@ -121,8 +140,14 @@
 
     private void OnTopicExpandCollapse(string topicName, bool expanded)
     {
-        if (expanded) _expandedTopics.Add(topicName);
-        else _expandedTopics.Remove(topicName);
+        if (expanded)
+        {
+            _expandedTopics.Add(topicName);
+        }
+        else
+        {
+            _expandedTopics.Remove(topicName);
+        }
     }
 
     private async Task SelectQueue(QueueInfo queue)

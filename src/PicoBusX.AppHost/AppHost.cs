@@ -1,4 +1,5 @@
-﻿using PicoBusX.AppHost;
+﻿using Aspire.Hosting.Azure;
+using PicoBusX.AppHost;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -9,14 +10,7 @@ var serviceBus = builder
     .RunAsEmulator(resourceBuilder =>
         resourceBuilder.WithImageTag("latest").WithLifetime(ContainerLifetime.Persistent));
 
-// Pre-create default entities for exploration and testing
-serviceBus.AddServiceBusQueue("Queue1");
-serviceBus.AddServiceBusQueue("Queue2");
-
-var topic1 = serviceBus.AddServiceBusTopic("Topic1");
-topic1.AddServiceBusSubscription("Subscription1");
-topic1.AddServiceBusSubscription("Subscription2");
-
+SeedExplorerEntities(serviceBus);
 
 // Add the PicoBusX web application  
 var picoBusX = builder
@@ -28,3 +22,18 @@ serviceBus.WithAdminConnectionStringEnvironment(picoBusX);
 
 
 builder.Build().Run();
+
+static void SeedExplorerEntities(IResourceBuilder<AzureServiceBusResource> serviceBus)
+{
+    serviceBus.AddServiceBusQueue("orders");
+    serviceBus.AddServiceBusQueue("billing");
+    serviceBus.AddServiceBusQueue("retries");
+
+    var ordersTopic = serviceBus.AddServiceBusTopic("orders-topic");
+    ordersTopic.AddServiceBusSubscription("order-created");
+    ordersTopic.AddServiceBusSubscription("order-cancelled");
+
+    var inventoryTopic = serviceBus.AddServiceBusTopic("inventory-topic");
+    inventoryTopic.AddServiceBusSubscription("restock");
+    inventoryTopic.AddServiceBusSubscription("warehouse");
+}

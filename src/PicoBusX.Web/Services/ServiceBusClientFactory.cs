@@ -22,14 +22,6 @@ public class ServiceBusClientFactory : IAsyncDisposable
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_options.ConnectionString);
 
-    private bool IsLikelyEmulator()
-    {
-        var connectionString = _options.ConnectionString;
-        return connectionString?.Contains("UseDevelopmentEmulator=true", StringComparison.OrdinalIgnoreCase) == true ||
-               connectionString?.Contains("localhost", StringComparison.OrdinalIgnoreCase) == true ||
-               connectionString?.Contains("127.0.0.1") == true;
-    }
-
     public ServiceBusClient GetClient()
     {
         if (_client is not null) return _client;
@@ -70,8 +62,11 @@ public class ServiceBusClientFactory : IAsyncDisposable
             if (_adminClient is not null) return _adminClient;
 
             var connectionString = _options.AdminConnectionString ?? _options.ConnectionString!;
+            var endpoint = ParseConnectionString(connectionString).TryGetValue("Endpoint", out var rawEndpoint)
+                ? rawEndpoint
+                : "(unknown endpoint)";
 
-            _logger.LogInformation("Admin connection string endpoint: {AdminEndpoint}", connectionString);
+            _logger.LogInformation("Creating Service Bus administration client for endpoint {AdminEndpoint}", endpoint);
 
             var retryOptions = new ServiceBusAdministrationClientOptions
             {
@@ -91,7 +86,7 @@ public class ServiceBusClientFactory : IAsyncDisposable
             _lock.Release();
         }
 
-        return _adminClient!;
+        return _adminClient;
     }
 
 

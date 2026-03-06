@@ -1,3 +1,4 @@
+using Azure;
 using Azure.Messaging.ServiceBus.Administration;
 using PicoBusX.Web.Models;
 
@@ -5,66 +6,75 @@ namespace PicoBusX.Web.Services;
 
 public class ExplorerService(
     ServiceBusClientFactory factory,
-    ILogger<ExplorerService> logger)
+    ILogger<ExplorerService> logger) : IExplorerService
 {
-    public async Task<List<QueueInfo>> GetQueuesAsync(CancellationToken ct = default)
+    public async Task<ExplorerLoadResult> LoadAsync(CancellationToken ct = default)
     {
-        var result = new List<QueueInfo>();
-
         try
         {
-            var admin = factory.GetAdminClient();
+            var queues = await GetQueuesAsync(ct);
+            var topics = await GetTopicsAsync(ct);
 
-            // Try listing queues first (works with real Azure Service Bus)
-            try
+            return new ExplorerLoadResult
             {
-                await foreach (var queue in admin.GetQueuesAsync(ct))
-                {
-                    QueueRuntimeProperties? runtime = null;
-                    try
-                    {
-                        runtime = await admin.GetQueueRuntimePropertiesAsync(queue.Name, ct);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogWarning(ex, "Failed to get runtime properties for queue {QueueName}", queue.Name);
-                    }
-
-                    result.Add(new QueueInfo
-                    {
-                        Name = queue.Name,
-                        ActiveMessageCount = runtime?.ActiveMessageCount ?? 0,
-                        DeadLetterMessageCount = runtime?.DeadLetterMessageCount ?? 0,
-                        TransferDeadLetterMessageCount = runtime?.TransferDeadLetterMessageCount ?? 0,
-                        SizeInBytes = runtime?.SizeInBytes ?? 0,
-                        CreatedAt = runtime?.CreatedAt,
-                        UpdatedAt = runtime?.UpdatedAt,
-                        LockDuration = queue.LockDuration,
-                        MaxDeliveryCount = queue.MaxDeliveryCount,
-                        RequiresSession = queue.RequiresSession,
-                        MaxSizeInMegabytes = queue.MaxSizeInMegabytes
-                    });
-                }
-
-                return result;
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Listing queues failed.");
-            }
+                Queues = queues,
+                Topics = topics
+            };
         }
         catch (Exception ex) when (IsConnectivityError(ex))
         {
-            logger.LogWarning(ex,
-                "Admin client not available. This may be due to emulator port 5300 not being exposed. Returning empty queue list.");
-            logger.LogInformation(
-                "Tip: Ensure the Azure Service Bus emulator is running and port 5300 is exposed for management operations.");
-            return result;
+            logger.LogWarning(ex, "Service Bus administration endpoint is unreachable.");
+
+            return new ExplorerLoadResult
+            {
+                WarningMessage = "Unable to reach the Service Bus administration endpoint right now. Check network access or the emulator, then refresh to try again."
+            };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (TryBuildUserFacingError(ex, out var message))
         {
-            logger.LogError(ex, "Failed to retrieve queues from Service Bus.");
-            throw;
+            logger.LogError(ex, "Service Bus metadata loading failed with a user-facing error.");
+
+            return new ExplorerLoadResult
+            {
+                ErrorMessage = message
+            };
+        }
+    }
+
+    public async Task<List<QueueInfo>> GetQueuesAsync(CancellationToken ct = default)
+    {
+        var result = new List<QueueInfo>();
+        var admin = factory.GetAdminClient();
+
+        await foreach (var queue in admin.GetQueuesAsync(ct))
+        {
+            var runtime = await TryGetQueueRuntimePropertiesAsync(admin, queue.Name, ct);
+
+            result.Add(new QueueInfo
+            {
+                Name = queue.Name,
+                ActiveMessageCount = runtime?.ActiveMessageCount ?? 0,
+                DeadLetterMessageCount = runtime?.DeadLetterMessageCount ?? 0,
+                TransferDeadLetterMessageCount = runtime?.TransferDeadLetterMessageCount ?? 0,
+                ScheduledMessageCount = runtime?.ScheduledMessageCount ?? 0,
+                TransferMessageCount = runtime?.TransferMessageCount ?? 0,
+                SizeInBytes = runtime?.SizeInBytes ?? 0,
+                CreatedAt = NormalizeTimestamp(runtime?.CreatedAt),
+                UpdatedAt = NormalizeTimestamp(runtime?.UpdatedAt),
+                AccessedAt = NormalizeTimestamp(runtime?.AccessedAt),
+                LockDuration = queue.LockDuration,
+                MaxDeliveryCount = queue.MaxDeliveryCount,
+                RequiresSession = queue.RequiresSession,
+                MaxSizeInMegabytes = queue.MaxSizeInMegabytes,
+                DefaultMessageTimeToLive = queue.DefaultMessageTimeToLive,
+                AutoDeleteOnIdle = queue.AutoDeleteOnIdle,
+                EnablePartitioning = queue.EnablePartitioning,
+                EnableBatchedOperations = queue.EnableBatchedOperations,
+                ForwardTo = NormalizeText(queue.ForwardTo),
+                ForwardDeadLetteredMessagesTo = NormalizeText(queue.ForwardDeadLetteredMessagesTo),
+                DeadLetteringOnMessageExpiration = queue.DeadLetteringOnMessageExpiration,
+                Status = queue.Status.ToString()
+            });
         }
 
         return result;
@@ -73,103 +83,200 @@ public class ExplorerService(
     public async Task<List<TopicInfo>> GetTopicsAsync(CancellationToken ct = default)
     {
         var result = new List<TopicInfo>();
+        var admin = factory.GetAdminClient();
 
+        await foreach (var topic in admin.GetTopicsAsync(ct))
+        {
+            var runtime = await TryGetTopicRuntimePropertiesAsync(admin, topic.Name, ct);
+            var subscriptions = await GetSubscriptionsForTopicAsync(admin, topic.Name, ct);
+
+            result.Add(new TopicInfo
+            {
+                Name = topic.Name,
+                SizeInBytes = runtime?.SizeInBytes ?? 0,
+                ScheduledMessageCount = runtime?.ScheduledMessageCount ?? 0,
+                CreatedAt = NormalizeTimestamp(runtime?.CreatedAt),
+                UpdatedAt = NormalizeTimestamp(runtime?.UpdatedAt),
+                AccessedAt = NormalizeTimestamp(runtime?.AccessedAt),
+                MaxSizeInMegabytes = topic.MaxSizeInMegabytes,
+                DefaultMessageTimeToLive = topic.DefaultMessageTimeToLive,
+                AutoDeleteOnIdle = topic.AutoDeleteOnIdle,
+                EnablePartitioning = topic.EnablePartitioning,
+                EnableBatchedOperations = topic.EnableBatchedOperations,
+                SupportOrdering = topic.SupportOrdering,
+                DuplicateDetectionHistoryTimeWindow = topic.DuplicateDetectionHistoryTimeWindow,
+                RequiresDuplicateDetection = topic.RequiresDuplicateDetection,
+                Status = topic.Status.ToString(),
+                Subscriptions = subscriptions
+            });
+        }
+
+        return result;
+    }
+
+    private async Task<QueueRuntimeProperties?> TryGetQueueRuntimePropertiesAsync(
+        ServiceBusAdministrationClient admin,
+        string queueName,
+        CancellationToken ct)
+    {
         try
         {
-            var admin = factory.GetAdminClient();
-
-
-            await foreach (var topic in admin.GetTopicsAsync(ct))
-            {
-                TopicRuntimeProperties? runtime = null;
-                try
-                {
-                    runtime = await admin.GetTopicRuntimePropertiesAsync(topic.Name, ct);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Failed to get runtime properties for topic {TopicName}", topic.Name);
-                }
-
-                var subs = await GetSubscriptionsForTopicAsync(admin, topic.Name, ct);
-
-                result.Add(new TopicInfo
-                {
-                    Name = topic.Name,
-                    SizeInBytes = runtime?.SizeInBytes ?? 0,
-                    CreatedAt = runtime?.CreatedAt,
-                    UpdatedAt = runtime?.UpdatedAt,
-                    MaxSizeInMegabytes = topic.MaxSizeInMegabytes,
-                    Subscriptions = subs
-                });
-            }
-
-            return result;
+            return await admin.GetQueueRuntimePropertiesAsync(queueName, ct);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!TryBuildUserFacingError(ex, out _))
         {
-            logger.LogError(ex,
-                "Failed to retrieve topics from Service Bus. Connection string or endpoint may be incorrect.");
-            throw;
+            logger.LogWarning(ex, "Failed to get runtime properties for queue {QueueName}", queueName);
+            return null;
         }
     }
 
-    /// <summary>
-    /// Returns true only for transient connectivity failures (socket/network errors, HTTP 503/504/408).
-    /// Auth and configuration errors (401, 403, 400) are NOT matched — those should propagate so
-    /// the UI can surface a meaningful "invalid credentials" or "bad endpoint" error.
-    /// </summary>
-    private static bool IsConnectivityError(Exception ex)
+    private async Task<TopicRuntimeProperties?> TryGetTopicRuntimePropertiesAsync(
+        ServiceBusAdministrationClient admin,
+        string topicName,
+        CancellationToken ct)
     {
-        if (ex.InnerException is System.Net.Sockets.SocketException or IOException)
-            return true;
-
-        if (ex is Azure.RequestFailedException rfe)
-            return rfe.Status is 503 or 504 or 408 or 0;
-
-        return false;
+        try
+        {
+            return await admin.GetTopicRuntimePropertiesAsync(topicName, ct);
+        }
+        catch (Exception ex) when (!TryBuildUserFacingError(ex, out _))
+        {
+            logger.LogWarning(ex, "Failed to get runtime properties for topic {TopicName}", topicName);
+            return null;
+        }
     }
 
     private async Task<List<SubscriptionInfo>> GetSubscriptionsForTopicAsync(
-        ServiceBusAdministrationClient admin, string topicName, CancellationToken ct)
+        ServiceBusAdministrationClient admin,
+        string topicName,
+        CancellationToken ct)
     {
-        var subs = new List<SubscriptionInfo>();
+        var subscriptions = new List<SubscriptionInfo>();
+
         try
         {
-            await foreach (var sub in admin.GetSubscriptionsAsync(topicName, ct))
+            await foreach (var subscription in admin.GetSubscriptionsAsync(topicName, ct))
             {
-                SubscriptionRuntimeProperties? subRuntime = null;
-                try
-                {
-                    subRuntime = await admin.GetSubscriptionRuntimePropertiesAsync(topicName, sub.SubscriptionName, ct);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex,
-                        "Failed to get runtime properties for subscription {SubscriptionName} on topic {TopicName}",
-                        sub.SubscriptionName, topicName);
-                }
+                var runtime = await TryGetSubscriptionRuntimePropertiesAsync(admin, topicName, subscription.SubscriptionName, ct);
 
-                subs.Add(new SubscriptionInfo
+                subscriptions.Add(new SubscriptionInfo
                 {
                     TopicName = topicName,
-                    Name = sub.SubscriptionName,
-                    ActiveMessageCount = subRuntime?.ActiveMessageCount ?? 0,
-                    DeadLetterMessageCount = subRuntime?.DeadLetterMessageCount ?? 0,
-                    CreatedAt = subRuntime?.CreatedAt,
-                    UpdatedAt = subRuntime?.UpdatedAt,
-                    LockDuration = sub.LockDuration,
-                    MaxDeliveryCount = sub.MaxDeliveryCount,
-                    RequiresSession = sub.RequiresSession
+                    Name = subscription.SubscriptionName,
+                    ActiveMessageCount = runtime?.ActiveMessageCount ?? 0,
+                    DeadLetterMessageCount = runtime?.DeadLetterMessageCount ?? 0,
+                    TransferMessageCount = runtime?.TransferMessageCount ?? 0,
+                    TransferDeadLetterMessageCount = runtime?.TransferDeadLetterMessageCount ?? 0,
+                    CreatedAt = NormalizeTimestamp(runtime?.CreatedAt),
+                    UpdatedAt = NormalizeTimestamp(runtime?.UpdatedAt),
+                    AccessedAt = NormalizeTimestamp(runtime?.AccessedAt),
+                    LockDuration = subscription.LockDuration,
+                    MaxDeliveryCount = subscription.MaxDeliveryCount,
+                    RequiresSession = subscription.RequiresSession,
+                    DefaultMessageTimeToLive = subscription.DefaultMessageTimeToLive,
+                    AutoDeleteOnIdle = subscription.AutoDeleteOnIdle,
+                    EnableBatchedOperations = subscription.EnableBatchedOperations,
+                    DeadLetteringOnMessageExpiration = subscription.DeadLetteringOnMessageExpiration,
+                    DeadLetteringOnFilterEvaluationExceptions = subscription.EnableDeadLetteringOnFilterEvaluationExceptions,
+                    ForwardTo = NormalizeText(subscription.ForwardTo),
+                    ForwardDeadLetteredMessagesTo = NormalizeText(subscription.ForwardDeadLetteredMessagesTo),
+                    Status = subscription.Status.ToString()
                 });
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!TryBuildUserFacingError(ex, out _))
         {
             logger.LogWarning(ex, "Failed to get subscriptions for topic {TopicName}", topicName);
         }
 
-        return subs;
+        return subscriptions;
+    }
+
+    private async Task<SubscriptionRuntimeProperties?> TryGetSubscriptionRuntimePropertiesAsync(
+        ServiceBusAdministrationClient admin,
+        string topicName,
+        string subscriptionName,
+        CancellationToken ct)
+    {
+        try
+        {
+            return await admin.GetSubscriptionRuntimePropertiesAsync(topicName, subscriptionName, ct);
+        }
+        catch (Exception ex) when (!TryBuildUserFacingError(ex, out _))
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to get runtime properties for subscription {SubscriptionName} on topic {TopicName}",
+                subscriptionName,
+                topicName);
+
+            return null;
+        }
+    }
+
+    private static DateTimeOffset? NormalizeTimestamp(DateTimeOffset? value)
+    {
+        return value is null || value == DateTimeOffset.MinValue ? null : value;
+    }
+
+    private static string? NormalizeText(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private static bool IsConnectivityError(Exception ex)
+    {
+        if (ex is TaskCanceledException)
+        {
+            return true;
+        }
+
+        if (ex.InnerException is System.Net.Sockets.SocketException or IOException)
+        {
+            return true;
+        }
+
+        if (ex is RequestFailedException requestFailedException)
+        {
+            return requestFailedException.Status is 0 or 408 or 503 or 504;
+        }
+
+        return false;
+    }
+
+    private static bool TryBuildUserFacingError(Exception ex, out string message)
+    {
+        if (ex is InvalidOperationException invalidOperationException &&
+            invalidOperationException.Message.Contains("connection string", StringComparison.OrdinalIgnoreCase))
+        {
+            message = "Service Bus is not configured. Set a valid connection string for this application instance.";
+            return true;
+        }
+
+        if (ex is RequestFailedException requestFailedException)
+        {
+            switch (requestFailedException.Status)
+            {
+                case 400:
+                    message = "Service Bus configuration is invalid. Verify the endpoint and connection string values.";
+                    return true;
+                case 401:
+                    message = "Authentication failed when loading Service Bus metadata. Verify the connection string or SAS policy.";
+                    return true;
+                case 403:
+                    message = "Access to Service Bus metadata was denied. Verify the SAS policy includes the required rights.";
+                    return true;
+            }
+        }
+
+        if (ex is not InvalidOperationException)
+        {
+            message = "The explorer could not load Service Bus metadata. Try refreshing or review the application logs for details.";
+            return true;
+        }
+
+        message = string.Empty;
+        return false;
     }
 
 }

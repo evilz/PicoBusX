@@ -1,5 +1,8 @@
 ﻿<Solution Format="1.0">
   <Project Path="src/PicoBusX.AppHost/PicoBusX.AppHost.csproj" />
   <Project Path="src/PicoBusX.Web/PicoBusX.Web.csproj" />
+  <Project Path="tests/PicoBusX.AppHost.Tests/PicoBusX.AppHost.Tests.csproj" />
+  <Project Path="tests/PicoBusX.PlaywrightTests/PicoBusX.PlaywrightTests.csproj" />
+  <Project Path="tests/PicoBusX.Web.Tests/PicoBusX.Web.Tests.csproj" />
 </Solution>
 
