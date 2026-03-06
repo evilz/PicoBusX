@@ -74,7 +74,7 @@ public class EntityExplorerPageTests : PageTest
 
         // Expand the topic first, then click the subscription
         await Page.GetByText("orders-topic", new() { Exact = true }).ClickAsync();
-        await Page.GetByText("order-created", new() { Exact = true }).ClickAsync();
+        await Page.GetByRole(AriaRole.Treeitem, new() { Name = "order-created" }).ClickAsync();
 
         await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "order-created" })).ToBeVisibleAsync();
         await Expect(Page.GetByText("Active Messages")).ToBeVisibleAsync();
