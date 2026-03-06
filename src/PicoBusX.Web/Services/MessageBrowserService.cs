@@ -63,13 +63,14 @@ public class MessageBrowserService
             SubQueue = SubQueue.DeadLetter,
             ReceiveMode = ServiceBusReceiveMode.PeekLock
         });
-        var messages = await receiver.ReceiveMessagesAsync(maxMessages: 50, maxWaitTime: TimeSpan.FromSeconds(5), cancellationToken: ct);
+        var messages = await receiver.ReceiveMessagesAsync(maxMessages: 100, maxWaitTime: TimeSpan.FromSeconds(5), cancellationToken: ct);
         var target = messages.FirstOrDefault(m => m.SequenceNumber == sequenceNumber);
         if (target == null)
         {
             foreach (var m in messages)
             {
-                try { await receiver.AbandonMessageAsync(m, cancellationToken: ct); } catch { }
+                try { await receiver.AbandonMessageAsync(m, cancellationToken: ct); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to abandon DLQ message {MessageId} during not-found cleanup", m.MessageId); }
             }
             throw new InvalidOperationException($"Message with sequence number {sequenceNumber} not found in DLQ.");
         }
@@ -94,7 +95,8 @@ public class MessageBrowserService
 
         foreach (var m in messages.Where(m => m.SequenceNumber != sequenceNumber))
         {
-            try { await receiver.AbandonMessageAsync(m, cancellationToken: ct); } catch { }
+            try { await receiver.AbandonMessageAsync(m, cancellationToken: ct); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to abandon DLQ message {MessageId} after resubmit", m.MessageId); }
         }
 
         _logger.LogInformation("Resubmitted message {SequenceNumber} from DLQ {EntityPath} to {ResendTo}", sequenceNumber, entityPath, resendTo);

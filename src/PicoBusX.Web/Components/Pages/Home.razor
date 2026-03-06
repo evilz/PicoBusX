@@ -441,7 +441,7 @@
                     await EntityManager.CreateSubscriptionAsync(_newTopicName!.Trim(), _newEntityName.Trim(), cts.Token);
                     break;
             }
-            ToastService.ShowSuccess($"{_newEntityType} '{_newEntityName}' created successfully!");
+            ToastService.ShowSuccess($"{char.ToUpper(_newEntityType[0])}{_newEntityType[1..]} '{_newEntityName}' created successfully!");
             CloseCreateDialog();
             await LoadDataAsync();
         }
