@@ -53,6 +53,12 @@
                         <FluentGridItem xs="12" sm="6">
                             <FluentTextField Label="SessionId" @bind-Value="_sessionId" Style="width: 100%;" />
                         </FluentGridItem>
+                        <FluentGridItem xs="12" sm="6">
+                            <FluentTextField Label="Scheduled Enqueue Time (UTC, yyyy-MM-ddTHH:mm)"
+                                             @bind-Value="_scheduledTime"
+                                             Placeholder="e.g. 2025-12-31T09:00"
+                                             Style="width: 100%;" />
+                        </FluentGridItem>
                     </FluentGrid>
 
                     <div>
@@ -113,6 +119,7 @@
     private string? _messageId;
     private string? _correlationId;
     private string? _sessionId;
+    private string? _scheduledTime;
     private string? _jsonError;
     private bool _jsonValid;
     private List<AppProp> _appProps = new();
@@ -183,6 +190,7 @@
             MessageId = string.IsNullOrWhiteSpace(_messageId) ? null : _messageId,
             CorrelationId = string.IsNullOrWhiteSpace(_correlationId) ? null : _correlationId,
             SessionId = string.IsNullOrWhiteSpace(_sessionId) ? null : _sessionId,
+            ScheduledEnqueueTime = ParseScheduledTime(_scheduledTime),
             ApplicationProperties = _appProps
                 .Where(p => !string.IsNullOrEmpty(p.Key))
                 .GroupBy(p => p.Key)
@@ -196,5 +204,15 @@
     {
         public string Key { get; set; } = string.Empty;
         public string Value { get; set; } = string.Empty;
+    }
+
+    private static DateTimeOffset? ParseScheduledTime(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (DateTimeOffset.TryParse(value, null, System.Globalization.DateTimeStyles.AssumeUniversal, out var result))
+            return result;
+        if (DateTime.TryParse(value, null, System.Globalization.DateTimeStyles.AssumeUniversal, out var dt))
+            return new DateTimeOffset(dt, TimeSpan.Zero);
+        return null;
     }
 }

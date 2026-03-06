@@ -43,6 +43,63 @@ public class MessageBrowserService
         return result;
     }
 
+    public async Task<List<BrowsedMessage>> PeekDeadLetterAsync(string entityPath, int maxCount, CancellationToken ct = default)
+    {
+        var client = _factory.GetClient();
+        await using var receiver = client.CreateReceiver(entityPath, new ServiceBusReceiverOptions
+        {
+            SubQueue = SubQueue.DeadLetter,
+            ReceiveMode = ServiceBusReceiveMode.PeekLock
+        });
+        var peeked = await receiver.PeekMessagesAsync(maxCount, cancellationToken: ct);
+        return peeked.Select(MapMessage).ToList();
+    }
+
+    public async Task ResubmitDeadLetterAsync(string entityPath, long sequenceNumber, CancellationToken ct = default)
+    {
+        var client = _factory.GetClient();
+        await using var receiver = client.CreateReceiver(entityPath, new ServiceBusReceiverOptions
+        {
+            SubQueue = SubQueue.DeadLetter,
+            ReceiveMode = ServiceBusReceiveMode.PeekLock
+        });
+        var messages = await receiver.ReceiveMessagesAsync(maxMessages: 50, maxWaitTime: TimeSpan.FromSeconds(5), cancellationToken: ct);
+        var target = messages.FirstOrDefault(m => m.SequenceNumber == sequenceNumber);
+        if (target == null)
+        {
+            foreach (var m in messages)
+            {
+                try { await receiver.AbandonMessageAsync(m, cancellationToken: ct); } catch { }
+            }
+            throw new InvalidOperationException($"Message with sequence number {sequenceNumber} not found in DLQ.");
+        }
+
+        string resendTo = entityPath;
+        if (entityPath.Contains("/subscriptions/"))
+            resendTo = entityPath.Split("/subscriptions/")[0];
+
+        var newMessage = new ServiceBusMessage(target.Body)
+        {
+            ContentType = target.ContentType
+        };
+        if (!string.IsNullOrEmpty(target.Subject)) newMessage.Subject = target.Subject;
+        if (!string.IsNullOrEmpty(target.CorrelationId)) newMessage.CorrelationId = target.CorrelationId;
+        if (!string.IsNullOrEmpty(target.SessionId)) newMessage.SessionId = target.SessionId;
+        foreach (var kv in target.ApplicationProperties)
+            newMessage.ApplicationProperties[kv.Key] = kv.Value;
+
+        await using var sender = client.CreateSender(resendTo);
+        await sender.SendMessageAsync(newMessage, ct);
+        await receiver.CompleteMessageAsync(target, ct);
+
+        foreach (var m in messages.Where(m => m.SequenceNumber != sequenceNumber))
+        {
+            try { await receiver.AbandonMessageAsync(m, cancellationToken: ct); } catch { }
+        }
+
+        _logger.LogInformation("Resubmitted message {SequenceNumber} from DLQ {EntityPath} to {ResendTo}", sequenceNumber, entityPath, resendTo);
+    }
+
     private BrowsedMessage MapMessage(ServiceBusReceivedMessage m)
     {
         string body = string.Empty;
@@ -58,7 +115,10 @@ public class MessageBrowserService
             EnqueuedTime = m.EnqueuedTime,
             DeliveryCount = m.DeliveryCount,
             Body = body,
-            ApplicationProperties = m.ApplicationProperties.ToDictionary(kv => kv.Key, kv => kv.Value?.ToString() ?? string.Empty)
+            ApplicationProperties = m.ApplicationProperties.ToDictionary(kv => kv.Key, kv => kv.Value?.ToString() ?? string.Empty),
+            SequenceNumber = m.SequenceNumber,
+            DeadLetterReason = m.DeadLetterReason,
+            DeadLetterErrorDescription = m.DeadLetterErrorDescription
         };
     }
 }

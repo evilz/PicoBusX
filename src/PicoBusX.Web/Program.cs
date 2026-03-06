@@ -21,6 +21,7 @@ builder.Services.AddSingleton<ServiceBusClientFactory>();
 builder.Services.AddScoped<ExplorerService>();
 builder.Services.AddScoped<MessageSenderService>();
 builder.Services.AddScoped<MessageBrowserService>();
+builder.Services.AddScoped<EntityManagementService>();
 
 // Add Fluent UI Blazor services
 builder.Services.AddFluentUIComponents();

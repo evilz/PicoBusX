@@ -28,6 +28,8 @@ public class MessageSenderService
         if (!string.IsNullOrWhiteSpace(request.MessageId)) message.MessageId = request.MessageId;
         if (!string.IsNullOrWhiteSpace(request.CorrelationId)) message.CorrelationId = request.CorrelationId;
         if (!string.IsNullOrWhiteSpace(request.SessionId)) message.SessionId = request.SessionId;
+        if (request.ScheduledEnqueueTime.HasValue)
+            message.ScheduledEnqueueTime = request.ScheduledEnqueueTime.Value;
 
         if (request.ApplicationProperties is not null)
         {

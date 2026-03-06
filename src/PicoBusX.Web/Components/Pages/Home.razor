@@ -4,6 +4,7 @@
 @inject ExplorerService Explorer
 @inject MessageSenderService Sender
 @inject MessageBrowserService Browser
+@inject EntityManagementService EntityManager
 @inject Microsoft.Extensions.Options.IOptions<ServiceBusConnectionOptions> BusOptions
 @inject ILogger<Home> Logger
 @inject IToastService ToastService
@@ -20,6 +21,12 @@
             IsLoading="@_loading"
             ErrorMessage="@_loadError" />
         <div class="tree-actions">
+            <FluentButton Appearance="Appearance.Outline"
+                          IconStart="@(new Icons.Regular.Size16.Add())"
+                          OnClick="OpenCreateDialog"
+                          Style="width: 100%; margin-bottom: 0.4rem;">
+                New Entity
+            </FluentButton>
             <FluentButton Appearance="Appearance.Stealth" 
                           IconStart="@(new Icons.Regular.Size16.ArrowSync())"
                           OnClick="LoadDataAsync"
@@ -60,6 +67,13 @@
                 {
                     <span class="entity-parent">under @_selectedEntity.TopicName</span>
                 }
+                <FluentButton Appearance="Appearance.Outline"
+                              IconStart="@(new Icons.Regular.Size16.Delete())"
+                              OnClick="OpenDeleteDialog"
+                              Style="margin-left: auto; color: #dc2626; border-color: #dc2626;"
+                              Title="Delete this entity">
+                    Delete
+                </FluentButton>
             </div>
 
             <FluentTabs ActiveTabId="@_activeTab" OnTabChange="HandleTabChange">
@@ -86,6 +100,16 @@
                             IsBusy="@_browsing"
                             ErrorMessage="@_browseError" />
                     </FluentTab>
+                    <FluentTab Id="dlq" Label="Dead Letter" Icon="@(new Icons.Regular.Size16.Warning())">
+                        <DlqPanel
+                            EntityPath="@_selectedEntity.EntityPath"
+                            DefaultMaxCount="@BusOptions.Value.EntityMaxPeek"
+                            OnPeek="HandleDlqPeekAsync"
+                            OnResubmit="HandleDlqResubmitAsync"
+                            Messages="@_dlqMessages"
+                            IsBusy="@_dlqBusy"
+                            ErrorMessage="@_dlqError" />
+                    </FluentTab>
                 }
                 else
                 {
@@ -102,6 +126,87 @@
         }
     </div>
 </div>
+
+<!-- Create Entity Dialog -->
+<FluentDialog @ref="_createDialog"
+              Hidden="@_createDialogHidden"
+              Modal="true"
+              TrapFocus="true"
+              PreventScroll="true"
+              @ondialogdismiss="CloseCreateDialog">
+    <FluentDialogHeader ShowDismiss="true">
+        <strong>Create New Entity</strong>
+    </FluentDialogHeader>
+    <FluentDialogBody>
+        <FluentStack Orientation="Orientation.Vertical" Style="gap: 1rem; padding: 0.5rem 0; min-width: 320px;">
+            <FluentSelect TOption="string"
+                          Label="Entity Type"
+                          @bind-Value="_newEntityType"
+                          Style="width: 100%;">
+                <FluentOption TOption="string" Value="queue">Queue</FluentOption>
+                <FluentOption TOption="string" Value="topic">Topic</FluentOption>
+                <FluentOption TOption="string" Value="subscription">Subscription</FluentOption>
+            </FluentSelect>
+
+            @if (_newEntityType == "subscription")
+            {
+                <FluentTextField Label="Topic Name"
+                                 @bind-Value="_newTopicName"
+                                 Placeholder="existing-topic-name"
+                                 Style="width: 100%;" />
+            }
+
+            <FluentTextField Label="@(_newEntityType == "subscription" ? "Subscription Name" : "Name")"
+                             @bind-Value="_newEntityName"
+                             Placeholder="my-entity-name"
+                             Style="width: 100%;" />
+
+            @if (!string.IsNullOrEmpty(_createEntityError))
+            {
+                <FluentMessageBar Intent="MessageIntent.Error">@_createEntityError</FluentMessageBar>
+            }
+        </FluentStack>
+    </FluentDialogBody>
+    <FluentDialogFooter>
+        <FluentButton Appearance="Appearance.Accent"
+                      OnClick="SubmitCreateEntityAsync"
+                      Disabled="@_creatingEntity">
+            @if (_creatingEntity) { <span>Creating…</span> } else { <span>Create</span> }
+        </FluentButton>
+        <FluentButton Appearance="Appearance.Outline" OnClick="CloseCreateDialog">Cancel</FluentButton>
+    </FluentDialogFooter>
+</FluentDialog>
+
+<!-- Delete Entity Dialog -->
+<FluentDialog @ref="_deleteDialog"
+              Hidden="@_deleteDialogHidden"
+              Modal="true"
+              TrapFocus="true"
+              PreventScroll="true"
+              @ondialogdismiss="CloseDeleteDialog">
+    <FluentDialogHeader ShowDismiss="true">
+        <strong>Delete Entity</strong>
+    </FluentDialogHeader>
+    <FluentDialogBody>
+        <FluentStack Orientation="Orientation.Vertical" Style="gap: 0.75rem; padding: 0.5rem 0;">
+            <p>Are you sure you want to delete <strong>@_selectedEntity?.Name</strong>?</p>
+            <p style="color: #dc2626; font-size: 0.85rem;">⚠️ This action cannot be undone. All messages will be lost.</p>
+            @if (!string.IsNullOrEmpty(_deleteEntityError))
+            {
+                <FluentMessageBar Intent="MessageIntent.Error">@_deleteEntityError</FluentMessageBar>
+            }
+        </FluentStack>
+    </FluentDialogBody>
+    <FluentDialogFooter>
+        <FluentButton Appearance="Appearance.Accent"
+                      OnClick="SubmitDeleteEntityAsync"
+                      Disabled="@_deletingEntity"
+                      Style="background: #dc2626;">
+            @if (_deletingEntity) { <span>Deleting…</span> } else { <span>Delete</span> }
+        </FluentButton>
+        <FluentButton Appearance="Appearance.Outline" OnClick="CloseDeleteDialog">Cancel</FluentButton>
+    </FluentDialogFooter>
+</FluentDialog>
 
 @code {
     private List<QueueInfo> _queues = new();
@@ -120,6 +225,25 @@
     private List<BrowsedMessage> _browsedMessages = new();
     private bool _browsing;
     private string? _browseError;
+
+    private List<BrowsedMessage> _dlqMessages = new();
+    private bool _dlqBusy;
+    private string? _dlqError;
+
+    // Create entity dialog state
+    private FluentDialog? _createDialog;
+    private bool _createDialogHidden = true;
+    private string _newEntityType = "queue";
+    private string _newEntityName = string.Empty;
+    private string? _newTopicName;
+    private bool _creatingEntity;
+    private string? _createEntityError;
+
+    // Delete entity dialog state
+    private FluentDialog? _deleteDialog;
+    private bool _deleteDialogHidden = true;
+    private bool _deletingEntity;
+    private string? _deleteEntityError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -160,6 +284,8 @@
         _sendResult = null;
         _sendError = null;
         _browseError = null;
+        _dlqMessages = new();
+        _dlqError = null;
     }
 
     private void HandleTabChange(FluentTab tab)
@@ -233,6 +359,144 @@
         finally
         {
             _browsing = false;
+        }
+    }
+
+    private async Task HandleDlqPeekAsync((string entityPath, int maxCount) args)
+    {
+        _dlqBusy = true;
+        _dlqError = null;
+        _dlqMessages = new();
+        StateHasChanged();
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            _dlqMessages = await Browser.PeekDeadLetterAsync(args.entityPath, args.maxCount, cts.Token);
+        }
+        catch (Exception ex)
+        {
+            _dlqError = ex.Message;
+            Logger.LogError(ex, "Failed to peek DLQ messages");
+        }
+        finally
+        {
+            _dlqBusy = false;
+        }
+    }
+
+    private async Task HandleDlqResubmitAsync(long sequenceNumber)
+    {
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await Browser.ResubmitDeadLetterAsync(_selectedEntity!.EntityPath, sequenceNumber, cts.Token);
+            ToastService.ShowSuccess($"Message #{sequenceNumber} resubmitted successfully!");
+            _dlqMessages = _dlqMessages.Where(m => m.SequenceNumber != sequenceNumber).ToList();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Resubmit failed: {ex.Message}");
+            Logger.LogError(ex, "Failed to resubmit DLQ message");
+        }
+    }
+
+    private void OpenCreateDialog()
+    {
+        _newEntityType = "queue";
+        _newEntityName = string.Empty;
+        _newTopicName = null;
+        _createEntityError = null;
+        _createDialogHidden = false;
+    }
+
+    private void CloseCreateDialog() => _createDialogHidden = true;
+
+    private async Task SubmitCreateEntityAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newEntityName))
+        {
+            _createEntityError = "Name is required.";
+            return;
+        }
+        if (_newEntityType == "subscription" && string.IsNullOrWhiteSpace(_newTopicName))
+        {
+            _createEntityError = "Topic Name is required for subscriptions.";
+            return;
+        }
+        _creatingEntity = true;
+        _createEntityError = null;
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            switch (_newEntityType)
+            {
+                case "queue":
+                    await EntityManager.CreateQueueAsync(_newEntityName.Trim(), cts.Token);
+                    break;
+                case "topic":
+                    await EntityManager.CreateTopicAsync(_newEntityName.Trim(), cts.Token);
+                    break;
+                case "subscription":
+                    await EntityManager.CreateSubscriptionAsync(_newTopicName!.Trim(), _newEntityName.Trim(), cts.Token);
+                    break;
+            }
+            ToastService.ShowSuccess($"{_newEntityType} '{_newEntityName}' created successfully!");
+            CloseCreateDialog();
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _createEntityError = ex.Message;
+            Logger.LogError(ex, "Failed to create entity");
+        }
+        finally
+        {
+            _creatingEntity = false;
+        }
+    }
+
+    private void OpenDeleteDialog()
+    {
+        _deleteEntityError = null;
+        _deleteDialogHidden = false;
+    }
+
+    private void CloseDeleteDialog() => _deleteDialogHidden = true;
+
+    private async Task SubmitDeleteEntityAsync()
+    {
+        if (_selectedEntity is null) return;
+        _deletingEntity = true;
+        _deleteEntityError = null;
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            switch (_selectedEntity.Type)
+            {
+                case BusEntityType.Queue:
+                    await EntityManager.DeleteQueueAsync(_selectedEntity.Name, cts.Token);
+                    break;
+                case BusEntityType.Topic:
+                    await EntityManager.DeleteTopicAsync(_selectedEntity.Name, cts.Token);
+                    break;
+                case BusEntityType.Subscription:
+                    await EntityManager.DeleteSubscriptionAsync(_selectedEntity.TopicName!, _selectedEntity.Name, cts.Token);
+                    break;
+            }
+            ToastService.ShowSuccess($"{_selectedEntity.Type} '{_selectedEntity.Name}' deleted successfully!");
+            _selectedEntity = null;
+            CloseDeleteDialog();
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _deleteEntityError = ex.Message;
+            Logger.LogError(ex, "Failed to delete entity");
+        }
+        finally
+        {
+            _deletingEntity = false;
         }
     }
 

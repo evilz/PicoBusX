@@ -13,4 +13,7 @@ public class BrowsedMessage
     public Dictionary<string, string> ApplicationProperties { get; set; } = new();
     public string? LockToken { get; set; }
     public string? ReceiverEntityPath { get; set; }
+    public long SequenceNumber { get; set; }
+    public string? DeadLetterReason { get; set; }
+    public string? DeadLetterErrorDescription { get; set; }
 }

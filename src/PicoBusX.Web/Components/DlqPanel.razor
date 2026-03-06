@@ -1,0 +1,159 @@
+@using PicoBusX.Web.Models
+
+<div class="peek-panel">
+    <FluentCard Style="margin-bottom: 1rem;">
+        <FluentStack Orientation="Orientation.Horizontal" Style="align-items: flex-end; gap: 1rem; flex-wrap: wrap;">
+            <FluentNumberField Label="Max Messages"
+                               @bind-Value="_maxCount"
+                               Min="1"
+                               Max="500"
+                               Style="width: 120px;" />
+            <FluentButton Appearance="Appearance.Accent"
+                          IconStart="@(new Icons.Regular.Size16.Eye())"
+                          OnClick="DoPeek"
+                          Disabled="@IsBusy">
+                @if (IsBusy) { <span>Loading…</span> } else { <span>Peek DLQ</span> }
+            </FluentButton>
+        </FluentStack>
+    </FluentCard>
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <FluentMessageBar Intent="MessageIntent.Error" Style="margin-bottom: 1rem;">@ErrorMessage</FluentMessageBar>
+    }
+
+    @if (Messages.Any())
+    {
+        <div style="font-size: 0.8rem; color: var(--neutral-foreground-hint); margin-bottom: 0.5rem;">
+            Showing @Messages.Count dead-letter message(s)
+        </div>
+        <FluentStack Orientation="Orientation.Vertical" Style="gap: 0.5rem;">
+            @foreach (var (msg, idx) in Messages.Select((m, i) => (m, i)))
+            {
+                var isExpanded = _expanded.Contains(idx);
+                var isResubmitting = _resubmitting.Contains(msg.SequenceNumber);
+                <FluentCard Style="padding: 0; overflow: hidden; border-left: 3px solid #f59e0b;">
+                    <div class="message-header" @onclick="() => ToggleMessage(idx)" style="cursor: pointer; padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.75rem; user-select: none;">
+                        <span style="color: var(--neutral-foreground-hint); font-size: 0.75rem; min-width: 24px;">#@(idx + 1)</span>
+                        <span style="font-family: monospace; font-size: 0.8rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@(msg.MessageId ?? "—")</span>
+                        <span style="color: var(--neutral-foreground-hint); font-size: 0.78rem;">@msg.EnqueuedTime.ToString("HH:mm:ss")</span>
+                        @if (!string.IsNullOrEmpty(msg.DeadLetterReason))
+                        {
+                            <FluentBadge Appearance="Appearance.Neutral" Style="background: #dc2626; color: white; font-size: 0.75rem;">@msg.DeadLetterReason</FluentBadge>
+                        }
+                        <FluentIcon Value="@(isExpanded ? (Icon)new Icons.Regular.Size16.ChevronUp() : new Icons.Regular.Size16.ChevronDown())" Style="color: var(--neutral-foreground-hint);" />
+                    </div>
+                    @if (isExpanded)
+                    {
+                        <FluentDivider />
+                        <div style="padding: 1rem;">
+                            <FluentStack Orientation="Orientation.Horizontal" Style="flex-wrap: wrap; gap: 0.75rem; font-size: 0.8rem; margin-bottom: 0.75rem; background: var(--neutral-fill-rest); padding: 0.5rem; border-radius: 4px;">
+                                <span><strong>Seq#:</strong> @msg.SequenceNumber</span>
+                                @if (!string.IsNullOrEmpty(msg.DeadLetterReason)) { <span><strong>DL Reason:</strong> @msg.DeadLetterReason</span> }
+                                @if (!string.IsNullOrEmpty(msg.DeadLetterErrorDescription)) { <span><strong>DL Error:</strong> @msg.DeadLetterErrorDescription</span> }
+                                @if (!string.IsNullOrEmpty(msg.SessionId)) { <span><strong>SessionId:</strong> @msg.SessionId</span> }
+                                @if (!string.IsNullOrEmpty(msg.CorrelationId)) { <span><strong>CorrelationId:</strong> @msg.CorrelationId</span> }
+                                <span><strong>Enqueued:</strong> @msg.EnqueuedTime.ToString("yyyy-MM-dd HH:mm:ss zzz")</span>
+                            </FluentStack>
+
+                            @if (msg.ApplicationProperties.Any())
+                            {
+                                <div style="margin-bottom: 0.75rem; font-size: 0.85rem;">
+                                    <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">Application Properties</FluentLabel>
+                                    <table class="details-table">
+                                        <tbody>
+                                            @foreach (var kv in msg.ApplicationProperties)
+                                            {
+                                                <tr><td>@kv.Key</td><td>@kv.Value</td></tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+
+                            <div style="margin-bottom: 0.75rem;">
+                                <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">Body</FluentLabel>
+                                <pre class="body-pre">@PrettyPrint(msg.Body)</pre>
+                            </div>
+
+                            <FluentButton Appearance="Appearance.Accent"
+                                          IconStart="@(new Icons.Regular.Size16.ArrowCircleUp())"
+                                          OnClick="() => DoResubmit(msg.SequenceNumber)"
+                                          Disabled="@isResubmitting"
+                                          Style="background: #f59e0b;">
+                                @if (isResubmitting) { <span>Resubmitting…</span> } else { <span>Resubmit</span> }
+                            </FluentButton>
+                        </div>
+                    }
+                </FluentCard>
+            }
+        </FluentStack>
+    }
+    else if (!IsBusy && string.IsNullOrEmpty(ErrorMessage))
+    {
+        <FluentCard Style="text-align: center; padding: 2rem; color: var(--neutral-foreground-hint);">
+            <div>☠️</div>
+            <div>No dead-letter messages. Use Peek DLQ to check.</div>
+        </FluentCard>
+    }
+</div>
+
+@code {
+    [Parameter] public string EntityPath { get; set; } = string.Empty;
+    [Parameter] public int DefaultMaxCount { get; set; } = 10;
+    [Parameter] public EventCallback<(string entityPath, int maxCount)> OnPeek { get; set; }
+    [Parameter] public EventCallback<long> OnResubmit { get; set; }
+    [Parameter] public List<BrowsedMessage> Messages { get; set; } = new();
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+
+    private int _maxCount;
+    private HashSet<int> _expanded = new();
+    private HashSet<long> _resubmitting = new();
+
+    protected override void OnInitialized()
+    {
+        _maxCount = DefaultMaxCount > 0 ? DefaultMaxCount : 10;
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (_maxCount == 0) _maxCount = DefaultMaxCount > 0 ? DefaultMaxCount : 10;
+    }
+
+    private async Task DoPeek() => await OnPeek.InvokeAsync((EntityPath, _maxCount));
+
+    private async Task DoResubmit(long sequenceNumber)
+    {
+        _resubmitting.Add(sequenceNumber);
+        StateHasChanged();
+        try
+        {
+            await OnResubmit.InvokeAsync(sequenceNumber);
+        }
+        finally
+        {
+            _resubmitting.Remove(sequenceNumber);
+        }
+    }
+
+    private void ToggleMessage(int idx)
+    {
+        if (_expanded.Contains(idx)) _expanded.Remove(idx);
+        else _expanded.Add(idx);
+    }
+
+    private static string PrettyPrint(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return "(empty)";
+        try
+        {
+            var doc = System.Text.Json.JsonDocument.Parse(body);
+            return System.Text.Json.JsonSerializer.Serialize(doc.RootElement, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return body;
+        }
+    }
+}
