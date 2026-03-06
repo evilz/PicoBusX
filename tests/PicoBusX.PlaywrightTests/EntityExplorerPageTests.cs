@@ -32,6 +32,70 @@ public class EntityExplorerPageTests : PageTest
         await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "New Entity" })).ToBeVisibleAsync();
     }
 
+    [Fact(Timeout = 600_000)]
+    public async Task HomePage_SelectQueue_ShowsQueueDetailsAndHidesEmptyState()
+    {
+        await using var app = await StartAppAsync();
+
+        await Page.GotoAsync(GetBaseUrl(app));
+        await Expect(Page.GetByText("Select a queue, topic, or subscription from the tree to get started."))
+            .ToBeVisibleAsync();
+
+        await Page.GetByText("orders", new() { Exact = true }).ClickAsync();
+
+        await Expect(Page.GetByText("Select a queue, topic, or subscription from the tree to get started."))
+            .ToBeHiddenAsync();
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "orders" })).ToBeVisibleAsync();
+        await Expect(Page.GetByText("Active Messages")).ToBeVisibleAsync();
+        await Expect(Page.GetByText("Details")).ToBeVisibleAsync();
+    }
+
+    [Fact(Timeout = 600_000)]
+    public async Task HomePage_SelectTopic_ShowsTopicDetailsWithSubscriptionsSummary()
+    {
+        await using var app = await StartAppAsync();
+
+        await Page.GotoAsync(GetBaseUrl(app));
+
+        await Page.GetByText("orders-topic", new() { Exact = true }).ClickAsync();
+
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "orders-topic" })).ToBeVisibleAsync();
+        await Expect(Page.GetByText("Subscriptions summary")).ToBeVisibleAsync();
+        await Expect(Page.GetByText("order-created")).ToBeVisibleAsync();
+        await Expect(Page.GetByText("order-cancelled")).ToBeVisibleAsync();
+    }
+
+    [Fact(Timeout = 600_000)]
+    public async Task HomePage_SelectSubscription_ShowsSubscriptionDetails()
+    {
+        await using var app = await StartAppAsync();
+
+        await Page.GotoAsync(GetBaseUrl(app));
+
+        // Expand the topic first, then click the subscription
+        await Page.GetByText("orders-topic", new() { Exact = true }).ClickAsync();
+        await Page.GetByText("order-created", new() { Exact = true }).ClickAsync();
+
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "order-created" })).ToBeVisibleAsync();
+        await Expect(Page.GetByText("Active Messages")).ToBeVisibleAsync();
+        await Expect(Page.GetByText("Dead-Letter Messages")).ToBeVisibleAsync();
+    }
+
+    [Fact(Timeout = 600_000)]
+    public async Task HomePage_SwitchingEntities_UpdatesDetailsPanel()
+    {
+        await using var app = await StartAppAsync();
+
+        await Page.GotoAsync(GetBaseUrl(app));
+
+        await Page.GetByText("orders", new() { Exact = true }).ClickAsync();
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "orders" })).ToBeVisibleAsync();
+
+        await Page.GetByText("billing", new() { Exact = true }).ClickAsync();
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "billing" })).ToBeVisibleAsync();
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "orders" })).ToBeHiddenAsync();
+    }
+
     private static async Task<DistributedApplication> StartAppAsync()
     {
         var builder = await DistributedApplicationTestingBuilder.CreateAsync<Projects.PicoBusX_AppHost>();
