@@ -1,9 +1,12 @@
-﻿# Stage 1 – build & publish
+# Stage 1 – build & publish
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY . .
+# Copy project file first for better NuGet layer caching
+COPY src/PicoBusX.Web/PicoBusX.Web.csproj src/PicoBusX.Web/
 RUN dotnet restore src/PicoBusX.Web/PicoBusX.Web.csproj
+
+COPY . .
 
 RUN dotnet publish src/PicoBusX.Web/PicoBusX.Web.csproj \
     --no-restore \
