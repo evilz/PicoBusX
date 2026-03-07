@@ -49,3 +49,6 @@ bld/
 # Secrets / local config overrides
 appsettings.local.json
 appsettings.*.local.json
+
+# Runtime connection settings saved by the Settings page
+.picobusx/
