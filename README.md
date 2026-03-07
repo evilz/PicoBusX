@@ -1,8 +1,8 @@
-# PicoBusX 🚌
+# PicoBusX
 
-A minimalist **Azure Service Bus Explorer** built with ASP.NET Core Blazor Server (.NET 10).
+🚌 A minimalist **Azure Service Bus Explorer** built with ASP.NET Core Blazor Server (.NET 10).
 
-Built with latest **Aspire 13.1.2** for local development orchestration and **Microsoft FluentUI Blazor** for a dashboard UI inspired by the .NET Aspire Dashboard.
+Built with **Aspire 13.1.2** for local development orchestration and **Microsoft FluentUI Blazor** for a dashboard UI inspired by the .NET Aspire Dashboard.
 
 ![PicoBusX Dashboard](https://github.com/user-attachments/assets/cc13c01d-4860-4701-b6db-1b59db5968d3)
 
@@ -39,52 +39,39 @@ Aspire automatically orchestrates PicoBusX with a local Azure Service Bus Emulat
   ```
 - Docker Desktop must be running
 
-**Features:**
-- 🚀 Automatic Service Bus Emulator orchestration
-- 📊 Real-time Aspire Dashboard at `http://localhost:4317`
-- 🔗 Automatic service discovery and connection string injection
-- 🔧 Client integration via `Aspire.Azure.Messaging.ServiceBus`
-- 📈 Built-in health checks and observability
-
-**Steps:**
 ```bash
-# Clone the repository
-git clone https://github.com/evilz/PicoBusX.git
-cd PicoBusX
-
-# Set PicoBusX.AppHost as the startup project and run
-# (In Visual Studio / Rider: Select PicoBusX.AppHost and press F5)
 cd src/PicoBusX.AppHost
 dotnet run
 ```
 
-The **Aspire Dashboard** will automatically open at `http://localhost:4317`, showing:
-- PicoBusX web app
-- Azure Service Bus Emulator status and logs
-- Real-time traces and observability data
+The **Aspire Dashboard** opens at `http://localhost:4317`, showing the PicoBusX web app, the Azure Service Bus Emulator, traces, and logs.
 
-Then visit: **http://localhost:5000** (or the endpoint shown in dashboard)
+Then visit: **http://localhost:5000** (or the endpoint shown in the dashboard).
 
-See [PicoBusX.AppHost README](./src/PicoBusX.AppHost/README.md) for more details on Aspire integrations and configuration.
+See [PicoBusX.AppHost README](./src/PicoBusX.AppHost/README.md) for more details.
 
 ### Option 2: Manual Setup (Standalone)
 
-Use your own Azure Service Bus namespace or emulator.
-
 ```bash
-# Clone the repository
+# Clone the repo
 git clone https://github.com/evilz/PicoBusX.git
 cd PicoBusX
 
-# Set your connection string (option A: environment variable)
-export ASB_CONNECTION_STRING="Endpoint=sb://YOUR_NAMESPACE.servicebus.windows.net/;SharedAccessKeyName=...;SharedAccessKey=..."
+# Set your connection string via user secrets
+dotnet user-secrets set "ServiceBus:SERVICEBUS_CONNECTIONSTRING" "<your-connection-string>" \
+  --project src/PicoBusX.Web/PicoBusX.Web.csproj
 
-# Run the app
-cd src/PicoBusX.Web
-dotnet run
+# Start the app
+dotnet run --project src/PicoBusX.Web/PicoBusX.Web.csproj
 ```
 
-Then open your browser at: **http://localhost:5000**
+Then open [https://localhost:7270](https://localhost:7270).
+
+### Run tests
+
+```bash
+dotnet test tests/PicoBusX.Web.Tests/PicoBusX.Web.Tests.csproj
+```
 
 ---
 
@@ -92,18 +79,16 @@ Then open your browser at: **http://localhost:5000**
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `ASB_CONNECTION_STRING` | ✅ Yes | — | Azure Service Bus connection string |
-| `ASB_TRANSPORT_TYPE` | No | `AmqpTcp` | `AmqpTcp` or `AmqpWebSockets` |
-| `ASB_ENTITY_MAX_PEEK` | No | `10` | Default max messages for Peek/Receive |
+| `ServiceBus__SERVICEBUS_CONNECTIONSTRING` | ✅ Yes | — | Azure Service Bus connection string |
+| `ServiceBus__TransportType` | No | `AmqpTcp` | `AmqpTcp` or `AmqpWebSockets` |
+| `ServiceBus__EntityMaxPeek` | No | `10` | Default max messages for Peek/Receive |
 
 ### Alternative: appsettings.json
-
-You can also set the connection string in `src/PicoBusX.Web/appsettings.json`:
 
 ```json
 {
   "ServiceBus": {
-    "ConnectionString": "Endpoint=sb://YOUR_NAMESPACE.servicebus.windows.net/;...",
+    "SERVICEBUS_CONNECTIONSTRING": "Endpoint=sb://YOUR_NAMESPACE.servicebus.windows.net/;...",
     "TransportType": "AmqpTcp",
     "EntityMaxPeek": 10
   }
@@ -111,6 +96,31 @@ You can also set the connection string in `src/PicoBusX.Web/appsettings.json`:
 ```
 
 > **⚠️ Never commit credentials to source control.** Prefer environment variables or user secrets for local development.
+
+---
+
+## CI/CD Pipeline
+
+The project uses GitHub Actions to **build**, **test**, and **publish a Docker image** to GitHub Container Registry (`ghcr.io`) on every push to `main`.
+
+### CI/CD assets in this repository
+
+The following files are already committed and provide the full CI/CD and containerization setup:
+
+- [GitHub Actions workflow](.github/workflows/ci.yml) — two-job pipeline: build & test, then Docker build & push
+- [Dockerfile](Dockerfile) — multi-stage build: `sdk:10.0` → `aspnet:10.0`, port 8080
+- [.dockerignore](.dockerignore) — excludes build artifacts, tests, and VCS metadata
+
+The workflow publishes to `ghcr.io/<owner>/picobusx` with tags: `latest` (main branch), branch name, and `sha-<commit>`.
+
+### Run the Docker image
+
+```bash
+docker run \
+  -e ServiceBus__SERVICEBUS_CONNECTIONSTRING="<your-connection-string>" \
+  -p 8080:8080 \
+  ghcr.io/evilz/picobusx:latest
+```
 
 ---
 
@@ -149,10 +159,20 @@ src/
 
 ## Known Limits
 
-- **Azure Service Bus Emulator** - ✅ **Supported** when running under Aspire (port 5300 is exposed for admin/management operations). All CRUD operations and entity management work with the emulator.
-- **No Azure AD / Managed Identity** support yet — only connection-string auth (SAS). AAD auth can be added by injecting `TokenCredential` into `ServiceBusClientFactory`.
-- **Peek is non-destructive** (uses `PeekMessages`). The "Receive" action uses PeekLock and immediately abandons messages after reading (non-destructive by default). Full consume is not available in this version.
-- **No dead-letter browser** — to peek DLQ, the entity path must be manually set to `<queue>/$DeadLetterQueue`.
-- **No message filtering** — peek returns the next N messages from the head of the queue/subscription.
-- **No reconnect / retry UI** — if the connection string changes, restart the app.
-- **Sessions** — session-aware entities require session-based receivers (not yet implemented).
+- **Azure Service Bus Emulator** — ✅ Supported when running under Aspire
+- **No Azure AD / Managed Identity** support yet — only connection-string auth (SAS)
+- **Peek is non-destructive** — uses `PeekMessages`; Receive uses PeekLock and abandons immediately
+- **No dead-letter browser** — to peek DLQ, set entity path to `<queue>/$DeadLetterQueue`
+- **No message filtering** — peek returns next N messages from the head of the queue/subscription
+- **No reconnect / retry UI** — restart the app if the connection string changes
+- **Sessions** — session-aware entities require session-based receivers (not yet implemented)
+
+---
+
+## Contributing
+
+Contributions are welcome! Open an issue or submit a pull request.
+
+## License
+
+MIT
