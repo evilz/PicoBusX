@@ -1,0 +1,46 @@
+.settings-page {
+    max-width: 680px;
+    margin: 2rem auto;
+    padding: 0 1rem 3rem;
+}
+
+.settings-header {
+    margin-bottom: 1.5rem;
+}
+
+.settings-form {
+    background: var(--neutral-layer-1);
+    border: 1px solid var(--neutral-stroke-rest);
+    border-radius: 6px;
+    padding: 1.5rem;
+}
+
+.field-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.field-hint {
+    font-size: 0.8rem;
+    color: var(--foreground-subtext-rest);
+    margin: 0.3rem 0 0;
+    line-height: 1.4;
+}
+
+.required {
+    color: var(--error-foreground-rest);
+    margin-left: 2px;
+}
+
+.optional {
+    font-size: 0.8rem;
+    color: var(--foreground-subtext-rest);
+    font-weight: normal;
+}
+
+@media (max-width: 600px) {
+    .settings-page {
+        margin: 1rem auto;
+        padding: 0 0.5rem 2rem;
+    }
+}

@@ -5,18 +5,21 @@ using PicoBusX.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add Aspire Azure Messaging ServiceBus client integration
-// This automatically configures ServiceBusClient from the connection string
-builder.AddAzureServiceBusClient("serviceBus");
-
+// Add Aspire Azure Messaging ServiceBus client integration when a connection string is pre-configured.
+// When running without Aspire (e.g., standalone Docker), the user configures the connection via the
+// Settings page at runtime, so we skip this registration to avoid startup failures.
+if (builder.Configuration.GetConnectionString("serviceBus") is not null)
+{
+    builder.AddAzureServiceBusClient("serviceBus");
+}
 
 builder.Services.AddOptions<ServiceBusConnectionOptions>()
     .Bind(builder.Configuration.GetSection(ServiceBusConnectionOptions.SectionName))
-    .Bind(builder.Configuration)      
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
+    .Bind(builder.Configuration)
+    .ValidateDataAnnotations();
 
 // Services
+builder.Services.AddSingleton<IConnectionSettingsStore, ConnectionSettingsStore>();
 builder.Services.AddSingleton<ServiceBusClientFactory>();
 builder.Services.AddScoped<IExplorerService, ExplorerService>();
 builder.Services.AddScoped<MessageSenderService>();

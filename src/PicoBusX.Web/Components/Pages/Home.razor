@@ -6,6 +6,8 @@
 @inject MessageBrowserService Browser
 @inject EntityManagementService EntityManager
 @inject Microsoft.Extensions.Options.IOptions<ServiceBusConnectionOptions> BusOptions
+@inject ServiceBusClientFactory Factory
+@inject NavigationManager Nav
 @inject ILogger<Home> Logger
 @inject IToastService ToastService
 
@@ -45,13 +47,27 @@
             <div class="empty-state">
                 <div class="empty-icon">🚌</div>
                 <h2>PicoBusX</h2>
-                <p>Select a queue, topic, or subscription from the tree to get started.</p>
-                @if (!string.IsNullOrEmpty(_connectionStatus))
+                @if (!Factory.IsConfigured)
                 {
-                    <FluentBadge Appearance="@(_isConnected ? Appearance.Accent : Appearance.Neutral)"
-                                 Style="margin-top: 1rem; font-size: 0.875rem; padding: 0.5rem 1rem;">
-                        @(_isConnected ? "✅ Connected" : "❌ Not Connected") — @_connectionStatus
-                    </FluentBadge>
+                    <p>No Azure Service Bus connection is configured.</p>
+                    <div style="margin-top: 1.25rem;">
+                        <FluentButton Appearance="Appearance.Accent"
+                                      IconStart="@(new Icons.Regular.Size20.Settings())"
+                                      OnClick="@(() => Nav.NavigateTo("/settings"))">
+                            Configure Connection
+                        </FluentButton>
+                    </div>
+                }
+                else
+                {
+                    <p>Select a queue, topic, or subscription from the tree to get started.</p>
+                    @if (!string.IsNullOrEmpty(_connectionStatus))
+                    {
+                        <FluentBadge Appearance="@(_isConnected ? Appearance.Accent : Appearance.Neutral)"
+                                     Style="margin-top: 1rem; font-size: 0.875rem; padding: 0.5rem 1rem;">
+                            @(_isConnected ? "✅ Connected" : "❌ Not Connected") — @_connectionStatus
+                        </FluentBadge>
+                    }
                 }
             </div>
         }

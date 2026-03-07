@@ -1,0 +1,327 @@
+@page "/settings"
+@rendermode InteractiveServer
+@inject IConnectionSettingsStore SettingsStore
+@inject ServiceBusClientFactory Factory
+@inject Microsoft.Extensions.Options.IOptions<ServiceBusConnectionOptions> AppOptions
+@inject NavigationManager Nav
+@inject IToastService ToastService
+
+<PageTitle>PicoBusX – Connection Settings</PageTitle>
+
+<div class="settings-page">
+    <div class="settings-header">
+        <FluentStack Orientation="Orientation.Horizontal"
+                     VerticalAlignment="VerticalAlignment.Center"
+                     HorizontalGap="8"
+                     Style="margin-bottom: 0.5rem;">
+            <FluentIcon Value="@(new Icons.Regular.Size24.PlugConnected())" />
+            <h1 style="margin: 0; font-size: 1.4rem;">Connection Settings</h1>
+        </FluentStack>
+        <p style="color: var(--foreground-subtext-rest); margin-top: 0.25rem;">
+            Configure the Azure Service Bus connection. Settings are saved to disk and survive restarts.
+        </p>
+        @if (!Factory.IsConfigured)
+        {
+            <FluentMessageBar Intent="MessageIntent.Warning" Style="margin-top: 0.75rem;">
+                No connection is currently configured. Enter your Azure Service Bus connection details below, then click <strong>Test &amp; Save</strong>.
+            </FluentMessageBar>
+        }
+        else
+        {
+            <FluentMessageBar Intent="MessageIntent.Success" Style="margin-top: 0.75rem;">
+                A connection is active. You can update the settings below or
+                <FluentAnchor Href="/" Appearance="Appearance.Hypertext">return to the explorer</FluentAnchor>.
+            </FluentMessageBar>
+        }
+    </div>
+
+    <div class="settings-form">
+        <FluentStack Orientation="Orientation.Vertical" VerticalGap="20">
+
+            <!-- Auth Type -->
+            <div class="field-group">
+                <FluentLabel Weight="FontWeight.Bold">Authentication Type</FluentLabel>
+                <FluentSelect TOption="string"
+                              @bind-Value="_authType"
+                              Style="width: 100%; margin-top: 0.35rem;"
+                              aria-label="Authentication type">
+                    <FluentOption TOption="string" Value="@ServiceBusConnectionOptions.AuthTypeConnectionString">Connection String (Shared Access Signature)</FluentOption>
+                    <FluentOption TOption="string" Value="@ServiceBusConnectionOptions.AuthTypeDefaultAzureCredential">Managed Identity / Default Azure Credential</FluentOption>
+                    <FluentOption TOption="string" Value="@ServiceBusConnectionOptions.AuthTypeServicePrincipal">Service Principal (Client Secret)</FluentOption>
+                </FluentSelect>
+                <p class="field-hint">
+                    @if (_authType == ServiceBusConnectionOptions.AuthTypeConnectionString)
+                    {
+                        <span>Uses a SAS connection string. Works with emulators and when you have a connection string from the Azure portal.</span>
+                    }
+                    else if (_authType == ServiceBusConnectionOptions.AuthTypeDefaultAzureCredential)
+                    {
+                        <span>Uses <code>DefaultAzureCredential</code>: automatically picks up Managed Identity, Azure CLI login, Visual Studio, or environment credentials.</span>
+                    }
+                    else
+                    {
+                        <span>Authenticates with a Microsoft Entra service principal using a client secret.</span>
+                    }
+                </p>
+            </div>
+
+            @if (_authType == ServiceBusConnectionOptions.AuthTypeConnectionString)
+            {
+                <div class="field-group">
+                    <FluentLabel Weight="FontWeight.Bold">Connection String <span class="required">*</span></FluentLabel>
+                    <FluentTextArea @bind-Value="_connectionString"
+                                    Placeholder="Endpoint=sb://your-namespace.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=..."
+                                    Style="width: 100%; font-family: monospace; margin-top: 0.35rem;"
+                                    Rows="3"
+                                    aria-label="Connection string" />
+                </div>
+                <div class="field-group">
+                    <FluentLabel>Admin Connection String <span class="optional">(optional)</span></FluentLabel>
+                    <FluentTextArea @bind-Value="_adminConnectionString"
+                                    Placeholder="Leave empty to use the main connection string for management operations"
+                                    Style="width: 100%; font-family: monospace; margin-top: 0.35rem;"
+                                    Rows="2"
+                                    aria-label="Admin connection string" />
+                    <p class="field-hint">Used for administration operations (list queues, topics, etc.) when you need separate credentials with manage rights.</p>
+                </div>
+            }
+            else
+            {
+                <div class="field-group">
+                    <FluentLabel Weight="FontWeight.Bold">Fully Qualified Namespace <span class="required">*</span></FluentLabel>
+                    <FluentTextField @bind-Value="_fullyQualifiedNamespace"
+                                     Placeholder="your-namespace.servicebus.windows.net"
+                                     Style="width: 100%; margin-top: 0.35rem;"
+                                     aria-label="Fully qualified namespace" />
+                    <p class="field-hint">The hostname of your Service Bus namespace, e.g. <code>myns.servicebus.windows.net</code>. Do not include a protocol prefix.</p>
+                </div>
+
+                @if (_authType == ServiceBusConnectionOptions.AuthTypeServicePrincipal)
+                {
+                    <div class="field-group">
+                        <FluentLabel Weight="FontWeight.Bold">Tenant ID <span class="required">*</span></FluentLabel>
+                        <FluentTextField @bind-Value="_tenantId"
+                                         Placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                                         Style="width: 100%; margin-top: 0.35rem;"
+                                         aria-label="Tenant ID" />
+                    </div>
+                    <div class="field-group">
+                        <FluentLabel Weight="FontWeight.Bold">Client ID <span class="required">*</span></FluentLabel>
+                        <FluentTextField @bind-Value="_clientId"
+                                         Placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                                         Style="width: 100%; margin-top: 0.35rem;"
+                                         aria-label="Client ID" />
+                    </div>
+                    <div class="field-group">
+                        <FluentLabel Weight="FontWeight.Bold">Client Secret <span class="required">*</span></FluentLabel>
+                        <FluentTextField @bind-Value="_clientSecret"
+                                         TextFieldType="TextFieldType.Password"
+                                         Style="width: 100%; margin-top: 0.35rem;"
+                                         aria-label="Client secret" />
+                        <FluentMessageBar Intent="MessageIntent.Warning" Style="margin-top: 0.5rem; font-size: 0.8rem;">
+                            ⚠️ The client secret is stored in plain text on the server filesystem. Prefer environment variables or Managed Identity in production environments.
+                        </FluentMessageBar>
+                    </div>
+                }
+            }
+
+            <!-- Transport Type -->
+            <div class="field-group">
+                <FluentLabel Weight="FontWeight.Bold">Transport Type</FluentLabel>
+                <FluentSelect TOption="string"
+                              @bind-Value="_transportType"
+                              Style="width: 100%; margin-top: 0.35rem;"
+                              aria-label="Transport type">
+                    <FluentOption TOption="string" Value="AmqpTcp">AMQP TCP (default, requires port 5671)</FluentOption>
+                    <FluentOption TOption="string" Value="AmqpWebSockets">AMQP over WebSockets (port 443, use behind strict firewalls)</FluentOption>
+                </FluentSelect>
+            </div>
+
+            <FluentDivider />
+
+            <!-- Actions -->
+            <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" VerticalAlignment="VerticalAlignment.Center">
+                <FluentButton Appearance="Appearance.Accent"
+                              IconStart="@(new Icons.Regular.Size16.Save())"
+                              OnClick="SaveAsync"
+                              Disabled="@(_saving || _testing)">
+                    @if (_saving) { <span>Saving…</span> } else { <span>Save</span> }
+                </FluentButton>
+                <FluentButton Appearance="Appearance.Outline"
+                              IconStart="@(new Icons.Regular.Size16.PlugConnected())"
+                              OnClick="TestConnectionAsync"
+                              Disabled="@(_saving || _testing)">
+                    @if (_testing) { <span>Testing…</span> } else { <span>Test Connection</span> }
+                </FluentButton>
+                @if (Factory.IsConfigured)
+                {
+                    <FluentButton Appearance="Appearance.Stealth"
+                                  IconStart="@(new Icons.Regular.Size16.ArrowLeft())"
+                                  OnClick="@(() => Nav.NavigateTo("/"))">
+                        Back to Explorer
+                    </FluentButton>
+                }
+                @if (SettingsStore.HasRuntimeSettings)
+                {
+                    <FluentButton Appearance="Appearance.Stealth"
+                                  IconStart="@(new Icons.Regular.Size16.Delete())"
+                                  OnClick="ClearSettingsAsync"
+                                  Disabled="@(_saving || _testing)">
+                        Clear Saved Settings
+                    </FluentButton>
+                }
+            </FluentStack>
+
+            @if (!string.IsNullOrEmpty(_validationError))
+            {
+                <FluentMessageBar Intent="MessageIntent.Error">
+                    @_validationError
+                </FluentMessageBar>
+            }
+
+            @if (!string.IsNullOrEmpty(_testResult))
+            {
+                <FluentMessageBar Intent="@(_testSuccess ? MessageIntent.Success : MessageIntent.Error)">
+                    @_testResult
+                </FluentMessageBar>
+            }
+
+        </FluentStack>
+    </div>
+</div>
+
+@code {
+    private string _authType = ServiceBusConnectionOptions.AuthTypeConnectionString;
+    private string? _connectionString;
+    private string? _adminConnectionString;
+    private string? _fullyQualifiedNamespace;
+    private string? _tenantId;
+    private string? _clientId;
+    private string? _clientSecret;
+    private string _transportType = "AmqpTcp";
+
+    private bool _saving;
+    private bool _testing;
+    private string? _testResult;
+    private bool _testSuccess;
+    private string? _validationError;
+
+    protected override void OnInitialized()
+    {
+        // Prefer runtime (user-saved) settings, fall back to appsettings / environment.
+        var settings = SettingsStore.GetRuntimeSettings() ?? AppOptions.Value;
+        _authType = settings.AuthType ?? ServiceBusConnectionOptions.AuthTypeConnectionString;
+        _connectionString = settings.ConnectionString;
+        _adminConnectionString = settings.AdminConnectionString;
+        _fullyQualifiedNamespace = settings.FullyQualifiedNamespace;
+        _tenantId = settings.TenantId;
+        _clientId = settings.ClientId;
+        _clientSecret = settings.ClientSecret;
+        _transportType = settings.TransportType ?? "AmqpTcp";
+    }
+
+    private async Task SaveAsync()
+    {
+        _validationError = Validate();
+        if (_validationError is not null) return;
+
+        _saving = true;
+        _testResult = null;
+        StateHasChanged();
+        try
+        {
+            var settings = BuildSettings();
+            await SettingsStore.SaveAsync(settings);
+            await Factory.ResetClientsAsync();
+            ToastService.ShowSuccess("Connection settings saved. The connection has been reset.");
+            Nav.NavigateTo("/");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to save settings: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task TestConnectionAsync()
+    {
+        _validationError = Validate();
+        if (_validationError is not null) return;
+
+        _testing = true;
+        _testResult = null;
+        _testSuccess = false;
+        StateHasChanged();
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            // Test using a temporary client without persisting settings.
+            await ServiceBusClientFactory.TestConnectionAsync(BuildSettings(), cts.Token);
+
+            _testSuccess = true;
+            _testResult = "✅ Connection successful! Click Save to keep these settings.";
+        }
+        catch (Exception ex)
+        {
+            _testSuccess = false;
+            _testResult = $"❌ Connection failed: {ex.Message}";
+        }
+        finally
+        {
+            _testing = false;
+        }
+    }
+
+    private async Task ClearSettingsAsync()
+    {
+        await SettingsStore.ClearAsync();
+        await Factory.ResetClientsAsync();
+        ToastService.ShowInfo("Saved settings cleared. The application will now use settings from environment variables or appsettings.json.");
+        Nav.NavigateTo("/settings", replace: true);
+    }
+
+    private string? Validate()
+    {
+        if (_authType == ServiceBusConnectionOptions.AuthTypeConnectionString)
+        {
+            if (string.IsNullOrWhiteSpace(_connectionString))
+                return "Connection String is required.";
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(_fullyQualifiedNamespace))
+                return "Fully Qualified Namespace is required.";
+
+            if (_authType == ServiceBusConnectionOptions.AuthTypeServicePrincipal)
+            {
+                if (string.IsNullOrWhiteSpace(_tenantId)) return "Tenant ID is required.";
+                if (string.IsNullOrWhiteSpace(_clientId)) return "Client ID is required.";
+                if (string.IsNullOrWhiteSpace(_clientSecret)) return "Client Secret is required.";
+            }
+        }
+
+        return null;
+    }
+
+    private ServiceBusConnectionOptions BuildSettings() => new()
+    {
+        AuthType = _authType,
+        ConnectionString = _authType == ServiceBusConnectionOptions.AuthTypeConnectionString
+            ? _connectionString?.Trim() : null,
+        AdminConnectionString = _authType == ServiceBusConnectionOptions.AuthTypeConnectionString
+            ? _adminConnectionString?.Trim() : null,
+        FullyQualifiedNamespace = _authType != ServiceBusConnectionOptions.AuthTypeConnectionString
+            ? _fullyQualifiedNamespace?.Trim() : null,
+        TenantId = _authType == ServiceBusConnectionOptions.AuthTypeServicePrincipal
+            ? _tenantId?.Trim() : null,
+        ClientId = _authType == ServiceBusConnectionOptions.AuthTypeServicePrincipal
+            ? _clientId?.Trim() : null,
+        ClientSecret = _authType == ServiceBusConnectionOptions.AuthTypeServicePrincipal
+            ? _clientSecret : null,
+        TransportType = _transportType,
+        EntityMaxPeek = AppOptions.Value.EntityMaxPeek,
+    };
+}
