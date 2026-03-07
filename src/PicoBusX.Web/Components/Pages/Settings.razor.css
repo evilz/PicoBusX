@@ -15,9 +15,14 @@
     padding: 1.5rem;
 }
 
+.settings-fields {
+    width: 100%;
+}
+
 .field-group {
     display: flex;
     flex-direction: column;
+    width: 100%;
 }
 
 .field-hint {

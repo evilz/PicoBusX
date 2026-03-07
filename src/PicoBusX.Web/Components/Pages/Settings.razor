@@ -36,7 +36,7 @@
     </div>
 
     <div class="settings-form">
-        <FluentStack Orientation="Orientation.Vertical" VerticalGap="20">
+        <FluentStack Class="settings-fields" Orientation="Orientation.Vertical" VerticalGap="20">
 
             <!-- Auth Type -->
             <div class="field-group">
@@ -71,7 +71,7 @@
                     <FluentLabel Weight="FontWeight.Bold">Connection String <span class="required">*</span></FluentLabel>
                     <FluentTextArea @bind-Value="_connectionString"
                                     Placeholder="Endpoint=sb://your-namespace.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=..."
-                                    Style="width: 100%; font-family: monospace; margin-top: 0.35rem;"
+                                    Style="display: block; width: 100%; font-family: monospace; margin-top: 0.35rem;"
                                     Rows="3"
                                     aria-label="Connection string" />
                 </div>
@@ -79,7 +79,7 @@
                     <FluentLabel>Admin Connection String <span class="optional">(optional)</span></FluentLabel>
                     <FluentTextArea @bind-Value="_adminConnectionString"
                                     Placeholder="Leave empty to use the main connection string for management operations"
-                                    Style="width: 100%; font-family: monospace; margin-top: 0.35rem;"
+                                    Style="display: block; width: 100%; font-family: monospace; margin-top: 0.35rem;"
                                     Rows="2"
                                     aria-label="Admin connection string" />
                     <p class="field-hint">Used for administration operations (list queues, topics, etc.) when you need separate credentials with manage rights.</p>
