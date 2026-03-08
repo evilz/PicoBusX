@@ -1,5 +1,6 @@
 ﻿@page "/"
 @rendermode InteractiveServer
+@inject NavigationManager NavigationManager
 @implements IDisposable
 @inject IExplorerService Explorer
 @inject MessageSenderService Sender
@@ -16,7 +17,7 @@
 <div class="dashboard">
     <!-- Left panel: Tree View -->
     <div class="panel-tree">
-        <BusTreeView 
+        <BusTreeView
             Queues="@_queues" 
             Topics="@_topics" 
             OnEntitySelected="HandleEntitySelected"
@@ -228,7 +229,49 @@
 @code {
     private List<QueueInfo> _queues = new();
     private List<TopicInfo> _topics = new();
+    [SupplyParameterFromQuery(Name = "name")]
+    [Parameter]
+    public string? EntityName { get; set; }
+
+    [SupplyParameterFromQuery(Name = "type")]
+    [Parameter]
+    public string? EntityType { get; set; }
+
+    [SupplyParameterFromQuery(Name = "topicName")]
+    [Parameter]
+    public string? TopicName { get; set; }
+
     private BusEntity? _selectedEntity;
+
+    protected override void OnParametersSet()
+    {
+        BusEntity? newEntity = null;
+
+        if (EntityName is not null && EntityType is not null)
+        {
+            if (Enum.TryParse<BusEntityType>(EntityType, ignoreCase: true, out var entityType))
+            {
+                newEntity = new BusEntity
+                {
+                    Type = entityType,
+                    Name = EntityName,
+                    TopicName = TopicName
+                };
+            }
+        }
+
+        var selectionChanged = (_selectedEntity is null) != (newEntity is null)
+            || (_selectedEntity is not null && newEntity is not null
+                && (_selectedEntity.Type != newEntity.Type
+                    || _selectedEntity.Name != newEntity.Name
+                    || _selectedEntity.TopicName != newEntity.TopicName));
+
+        if (selectionChanged)
+        {
+            _selectedEntity = newEntity;
+            ResetEntityScopedState();
+        }
+    }
     private string _activeTab = "details";
     private bool _loading;
     private string? _loadError;
@@ -318,6 +361,17 @@
     private void HandleEntitySelected(BusEntity entity)
     {
         _selectedEntity = entity;
+        NavigationManager.NavigateTo(NavigationManager.GetUriWithQueryParameters("/", new Dictionary<string, object?>
+        {
+            { "name", entity.Name },
+            { "type", entity.Type.ToString() },
+            { "topicName", entity.TopicName }
+        }));
+        ResetEntityScopedState();
+    }
+
+    private void ResetEntityScopedState()
+    {
         _activeTab = "details";
         _browsedMessages = new();
         _sendResult = null;
