@@ -1,5 +1,6 @@
 ﻿@page "/"
 @rendermode InteractiveServer
+@inject NavigationManager NavigationManager
 @implements IDisposable
 @inject IExplorerService Explorer
 @inject MessageSenderService Sender
@@ -14,7 +15,7 @@
 <div class="dashboard">
     <!-- Left panel: Tree View -->
     <div class="panel-tree">
-        <BusTreeView 
+        <BusTreeView
             Queues="@_queues" 
             Topics="@_topics" 
             OnEntitySelected="HandleEntitySelected"
@@ -212,7 +213,31 @@
 @code {
     private List<QueueInfo> _queues = new();
     private List<TopicInfo> _topics = new();
+    [SupplyParameterFromQuery(Name = "entityName")]
+    [Parameter]
+    public string? EntityName { get; set; }
+
+    [SupplyParameterFromQuery(Name = "entityType")]
+    [Parameter]
+    public string? EntityType { get; set; }
+
+    [SupplyParameterFromQuery(Name = "namespace")]
+    [Parameter]
+    public string? Namespace { get; set; }
+
+    [SupplyParameterFromQuery(Name = "topicName")]
+    [Parameter]
+    public string? TopicName { get; set; }
+
     private BusEntity? _selectedEntity;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (EntityName is not null && EntityType is not null && Namespace is not null)
+        {
+            _selectedEntity = new BusEntity(Namespace, EntityType, EntityName, TopicName);
+        }
+    }
     private string _activeTab = "details";
     private bool _loading;
     private string? _loadError;
@@ -302,6 +327,13 @@
     private void HandleEntitySelected(BusEntity entity)
     {
         _selectedEntity = entity;
+    NavigationManager.NavigateTo(NavigationManager.GetUriWithQueryParameters("/", new Dictionary<string, object?>
+    {
+        { "entityName", entity.EntityName },
+        { "entityType", entity.EntityType },
+        { "namespace", entity.Namespace },
+        { "topicName", entity.TopicName }
+    }));
         _activeTab = "details";
         _browsedMessages = new();
         _sendResult = null;
