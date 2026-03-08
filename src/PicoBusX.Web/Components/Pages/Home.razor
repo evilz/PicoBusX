@@ -213,17 +213,13 @@
 @code {
     private List<QueueInfo> _queues = new();
     private List<TopicInfo> _topics = new();
-    [SupplyParameterFromQuery(Name = "entityName")]
+    [SupplyParameterFromQuery(Name = "name")]
     [Parameter]
     public string? EntityName { get; set; }
 
-    [SupplyParameterFromQuery(Name = "entityType")]
+    [SupplyParameterFromQuery(Name = "type")]
     [Parameter]
     public string? EntityType { get; set; }
-
-    [SupplyParameterFromQuery(Name = "namespace")]
-    [Parameter]
-    public string? Namespace { get; set; }
 
     [SupplyParameterFromQuery(Name = "topicName")]
     [Parameter]
@@ -233,25 +229,31 @@
 
     protected override void OnParametersSet()
     {
-        if (EntityName is not null && EntityType is not null && Namespace is not null)
+        BusEntity? newEntity = null;
+
+        if (EntityName is not null && EntityType is not null)
         {
             if (Enum.TryParse<BusEntityType>(EntityType, ignoreCase: true, out var entityType))
             {
-                _selectedEntity = new BusEntity
+                newEntity = new BusEntity
                 {
                     Type = entityType,
                     Name = EntityName,
                     TopicName = TopicName
                 };
             }
-            else
-            {
-                _selectedEntity = null;
-            }
         }
-        else
+
+        var selectionChanged = (_selectedEntity is null) != (newEntity is null)
+            || (_selectedEntity is not null && newEntity is not null
+                && (_selectedEntity.Type != newEntity.Type
+                    || _selectedEntity.Name != newEntity.Name
+                    || _selectedEntity.TopicName != newEntity.TopicName));
+
+        if (selectionChanged)
         {
-            _selectedEntity = null;
+            _selectedEntity = newEntity;
+            ResetEntityScopedState();
         }
     }
     private string _activeTab = "details";
@@ -349,6 +351,11 @@
             { "type", entity.Type.ToString() },
             { "topicName", entity.TopicName }
         }));
+        ResetEntityScopedState();
+    }
+
+    private void ResetEntityScopedState()
+    {
         _activeTab = "details";
         _browsedMessages = new();
         _sendResult = null;
