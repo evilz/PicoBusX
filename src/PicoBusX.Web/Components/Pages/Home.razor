@@ -235,7 +235,23 @@
     {
         if (EntityName is not null && EntityType is not null && Namespace is not null)
         {
-            _selectedEntity = new BusEntity(Namespace, EntityType, EntityName, TopicName);
+            if (Enum.TryParse<BusEntityType>(EntityType, ignoreCase: true, out var entityType))
+            {
+                _selectedEntity = new BusEntity
+                {
+                    Type = entityType,
+                    Name = EntityName,
+                    TopicName = TopicName
+                };
+            }
+            else
+            {
+                _selectedEntity = null;
+            }
+        }
+        else
+        {
+            _selectedEntity = null;
         }
     }
     private string _activeTab = "details";
