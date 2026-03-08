@@ -231,7 +231,7 @@
 
     private BusEntity? _selectedEntity;
 
-    protected override async Task OnParametersSetAsync()
+    protected override void OnParametersSet()
     {
         if (EntityName is not null && EntityType is not null && Namespace is not null)
         {
