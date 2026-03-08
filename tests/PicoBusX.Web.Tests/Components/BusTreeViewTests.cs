@@ -38,10 +38,13 @@ public class BusTreeViewTests : TestContext
                 }
             }));
 
+        ExpandTopic(cut.Instance, "orders-topic");
+        cut.Render();
+
         cut.Markup.Should().Contain("Queues (2)");
         cut.Markup.Should().Contain("Topics (1)");
         cut.Markup.Should().Contain("DL:2");
-        cut.Markup.Should().Contain("order-created");
+        cut.Markup.Should().Contain("orders-topic");
     }
 
     [Fact]
@@ -66,20 +69,20 @@ public class BusTreeViewTests : TestContext
                 }
             }));
 
-        GetPrivateField<BusTreeView, string>("_filter").SetValue(cut.Instance, "ORDER");
-
+        ExpandTopic(cut.Instance, "inventory-topic");
+        GetPrivateField<BusTreeView>("_filter").SetValue(cut.Instance, "ORDER");
         cut.Render();
 
         cut.Markup.Should().Contain("Queues (1)");
         cut.Markup.Should().Contain("Topics (1)");
         cut.Markup.Should().Contain("orders");
-        cut.Markup.Should().Contain("order-audit");
+        cut.Markup.Should().Contain("inventory-topic");
         cut.Markup.Should().NotContain("billing");
         cut.Markup.Should().NotContain("warehouse");
     }
 
     [Fact]
-    public async Task SelectQueue_InvokesOnEntitySelectedWithQueueType()
+    public void ClickQueueTreeItem_WhenRendered_InvokesOnEntitySelected()
     {
         BusEntity? captured = null;
         var queue = new QueueInfo { Name = "orders" };
@@ -87,36 +90,17 @@ public class BusTreeViewTests : TestContext
         var cut = RenderComponent<BusTreeView>(parameters => parameters
             .Add(p => p.Queues, [queue])
             .Add(p => p.Topics, [])
-            .Add(p => p.OnEntitySelected, EventCallback.Factory.Create<BusEntity>(
-                this, entity => captured = entity)));
+            .Add(p => p.OnEntitySelected, EventCallback.Factory.Create<BusEntity>(this, entity => captured = entity)));
 
-        await cut.InvokeAsync(() => InvokePrivateMethod<BusTreeView>(cut.Instance, "SelectQueue", queue));
+        cut.Find("button[role='treeitem']").Click();
 
         captured.Should().NotBeNull();
         captured!.Type.Should().Be(BusEntityType.Queue);
         captured.Name.Should().Be("orders");
-        captured.TopicName.Should().BeNull();
     }
 
     [Fact]
-    public async Task SelectQueue_UpdatesInternalSelectionState()
-    {
-        var queue = new QueueInfo { Name = "orders" };
-
-        var cut = RenderComponent<BusTreeView>(parameters => parameters
-            .Add(p => p.Queues, [queue])
-            .Add(p => p.Topics, []));
-
-        await cut.InvokeAsync(() => InvokePrivateMethod<BusTreeView>(cut.Instance, "SelectQueue", queue));
-
-        var selected = GetPrivateField<BusTreeView, BusEntity>("_selected").GetValue(cut.Instance) as BusEntity;
-        selected.Should().NotBeNull();
-        selected!.Type.Should().Be(BusEntityType.Queue);
-        selected.Name.Should().Be("orders");
-    }
-
-    [Fact]
-    public async Task SelectTopic_InvokesOnEntitySelectedWithTopicTypeAndExpandsTopic()
+    public void ClickTopicTreeItem_WhenRendered_ExpandsTopicAndInvokesOnEntitySelected()
     {
         BusEntity? captured = null;
         var topic = new TopicInfo { Name = "orders-topic", Subscriptions = [] };
@@ -124,18 +108,15 @@ public class BusTreeViewTests : TestContext
         var cut = RenderComponent<BusTreeView>(parameters => parameters
             .Add(p => p.Queues, [])
             .Add(p => p.Topics, [topic])
-            .Add(p => p.OnEntitySelected, EventCallback.Factory.Create<BusEntity>(
-                this, entity => captured = entity)));
+            .Add(p => p.OnEntitySelected, EventCallback.Factory.Create<BusEntity>(this, entity => captured = entity)));
 
-        await cut.InvokeAsync(() => InvokePrivateMethod<BusTreeView>(cut.Instance, "SelectTopic", topic));
+        cut.Find("button.tree-entity-button-expandable").Click();
 
         captured.Should().NotBeNull();
         captured!.Type.Should().Be(BusEntityType.Topic);
         captured.Name.Should().Be("orders-topic");
-        captured.TopicName.Should().BeNull();
 
-        var expandedTopics = GetPrivateField<BusTreeView, HashSet<string>>("_expandedTopics")
-            .GetValue(cut.Instance) as HashSet<string>;
+        var expandedTopics = GetPrivateField<BusTreeView>("_expandedTopics").GetValue(cut.Instance) as HashSet<string>;
         expandedTopics.Should().Contain("orders-topic");
     }
 
@@ -149,10 +130,9 @@ public class BusTreeViewTests : TestContext
         var cut = RenderComponent<BusTreeView>(parameters => parameters
             .Add(p => p.Queues, [])
             .Add(p => p.Topics, [topic])
-            .Add(p => p.OnEntitySelected, EventCallback.Factory.Create<BusEntity>(
-                this, entity => captured = entity)));
+            .Add(p => p.OnEntitySelected, EventCallback.Factory.Create<BusEntity>(this, entity => captured = entity)));
 
-        await cut.InvokeAsync(() => InvokePrivateMethod<BusTreeView>(cut.Instance, "SelectSub", sub));
+        await cut.InvokeAsync(() => InvokePrivateMethod(cut.Instance, "SelectSub", sub));
 
         captured.Should().NotBeNull();
         captured!.Type.Should().Be(BusEntityType.Subscription);
@@ -169,15 +149,46 @@ public class BusTreeViewTests : TestContext
         var cut = RenderComponent<BusTreeView>(parameters => parameters
             .Add(p => p.Queues, [])
             .Add(p => p.Topics, [new TopicInfo { Name = "orders-topic", Subscriptions = [sub] }])
-            .Add(p => p.OnEntitySelected, EventCallback.Factory.Create<BusEntity>(
-                this, entity => captured = entity)));
+            .Add(p => p.OnEntitySelected, EventCallback.Factory.Create<BusEntity>(this, entity => captured = entity)));
 
-        await cut.InvokeAsync(() => InvokePrivateMethod<BusTreeView>(cut.Instance, "SelectSub", sub));
+        await cut.InvokeAsync(() => InvokePrivateMethod(cut.Instance, "SelectSub", sub));
 
         captured!.EntityPath.Should().Be("orders-topic/subscriptions/order-created");
     }
 
-    private static FieldInfo GetPrivateField<TComponent, TField>(string fieldName) =>
+    [Fact]
+    public void TreeItems_WithEntityNames_RenderSemanticTreeItems()
+    {
+        var queue = new QueueInfo { Name = "orders" };
+        var topic = new TopicInfo
+        {
+            Name = "orders-topic",
+            Subscriptions =
+            [
+                new SubscriptionInfo { Name = "order-created", TopicName = "orders-topic" }
+            ]
+        };
+
+        var cut = RenderComponent<BusTreeView>(parameters => parameters
+            .Add(p => p.Queues, [queue])
+            .Add(p => p.Topics, [topic]));
+
+        ExpandTopic(cut.Instance, "orders-topic");
+        cut.Render();
+
+        cut.Markup.Should().Contain("role=\"tree\"");
+        cut.Markup.Should().Contain("role=\"treeitem\"");
+        cut.Markup.Should().Contain(">orders<");
+        cut.Markup.Should().Contain(">orders-topic<");
+    }
+
+    private static void ExpandTopic(BusTreeView instance, string topicName)
+    {
+        var expandedTopics = GetPrivateField<BusTreeView>("_expandedTopics").GetValue(instance) as HashSet<string>;
+        expandedTopics!.Add(topicName);
+    }
+
+    private static FieldInfo GetPrivateField<TComponent>(string fieldName) =>
         typeof(TComponent).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)!;
 
     private static Task InvokePrivateMethod<TComponent>(TComponent instance, string methodName, params object[] args)

@@ -1,0 +1,100 @@
+.tree-root {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.5rem;
+}
+
+.tree-group-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.tree-group-toggle,
+.tree-entity-button {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.tree-group-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.4rem;
+    font-weight: 600;
+}
+
+.tree-group-items,
+.tree-topic-section,
+.tree-children {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.tree-entity-button {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.4rem;
+    border-radius: 0.4rem;
+}
+
+.tree-entity-button:hover,
+.tree-group-toggle:hover {
+    background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.tree-entity-button-selected {
+    background: color-mix(in srgb, var(--accent-fill-rest, #2563eb) 18%, transparent);
+}
+
+.tree-entity-button-expandable {
+    font-weight: 500;
+}
+
+.tree-children {
+    margin-left: 1.35rem;
+}
+
+.tree-subscription-button {
+    padding-left: 0.55rem;
+}
+
+.tree-chevron {
+    width: 1rem;
+    flex: 0 0 1rem;
+    text-align: center;
+    opacity: 0.8;
+}
+
+.tree-item-hit-area {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    min-width: 0;
+    cursor: pointer;
+    pointer-events: none;
+}
+
+.tree-item-hit-area * {
+    pointer-events: none;
+}
+
+.tree-item-meta {
+    margin-left: 0.4rem;
+    font-size: 0.72rem;
+    opacity: 0.6;
+}
+
+.tree-empty-state {
+    padding: 0.25rem 0.4rem 0.25rem 1.35rem;
+    font-size: 0.85rem;
+    opacity: 0.7;
+}

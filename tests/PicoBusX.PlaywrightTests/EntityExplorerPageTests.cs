@@ -1,4 +1,4 @@
-﻿﻿using Aspire.Hosting;
+﻿using Aspire.Hosting;
 using Aspire.Hosting.Testing;
 using Microsoft.Playwright;
 using Microsoft.Playwright.Xunit;
@@ -41,7 +41,7 @@ public class EntityExplorerPageTests : PageTest
         await Expect(Page.GetByText("Select a queue, topic, or subscription from the tree to get started."))
             .ToBeVisibleAsync();
 
-        await Page.GetByText("orders", new() { Exact = true }).ClickAsync();
+        await Page.GetByRole(AriaRole.Treeitem, new() { Name = "orders", Exact = true }).ClickAsync();
 
         await Expect(Page.GetByText("Select a queue, topic, or subscription from the tree to get started."))
             .ToBeHiddenAsync();
@@ -51,13 +51,14 @@ public class EntityExplorerPageTests : PageTest
     }
 
     [Fact(Timeout = 600_000)]
+    
     public async Task HomePage_SelectTopic_ShowsTopicDetailsWithSubscriptionsSummary()
     {
         await using var app = await StartAppAsync();
 
         await Page.GotoAsync(GetBaseUrl(app));
 
-        await Page.GetByText("orders-topic", new() { Exact = true }).ClickAsync();
+        await Page.GetByRole(AriaRole.Treeitem, new() { Name = "orders-topic", Exact = true }).ClickAsync();
 
         await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "orders-topic" })).ToBeVisibleAsync();
         await Expect(Page.GetByText("Subscriptions summary")).ToBeVisibleAsync();
@@ -72,9 +73,8 @@ public class EntityExplorerPageTests : PageTest
 
         await Page.GotoAsync(GetBaseUrl(app));
 
-        // Expand the topic first, then click the subscription
-        await Page.GetByText("orders-topic", new() { Exact = true }).ClickAsync();
-        await Page.GetByRole(AriaRole.Treeitem, new() { Name = "order-created" }).ClickAsync();
+        await Page.GetByRole(AriaRole.Treeitem, new() { Name = "orders-topic", Exact = true }).ClickAsync();
+        await Page.GetByRole(AriaRole.Treeitem, new() { Name = "order-created", Exact = true }).ClickAsync();
 
         await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "order-created" })).ToBeVisibleAsync();
         await Expect(Page.GetByText("Active Messages")).ToBeVisibleAsync();
@@ -88,10 +88,10 @@ public class EntityExplorerPageTests : PageTest
 
         await Page.GotoAsync(GetBaseUrl(app));
 
-        await Page.GetByText("orders", new() { Exact = true }).ClickAsync();
+        await Page.GetByRole(AriaRole.Treeitem, new() { Name = "orders", Exact = true }).ClickAsync();
         await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "orders" })).ToBeVisibleAsync();
 
-        await Page.GetByText("billing", new() { Exact = true }).ClickAsync();
+        await Page.GetByRole(AriaRole.Treeitem, new() { Name = "billing", Exact = true }).ClickAsync();
         await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "billing" })).ToBeVisibleAsync();
         await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "orders" })).ToBeHiddenAsync();
     }

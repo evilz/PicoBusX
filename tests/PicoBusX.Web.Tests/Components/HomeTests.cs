@@ -16,6 +16,27 @@ namespace PicoBusX.Web.Tests.Components;
 
 public class HomeTests : TestContext
 {
+    private sealed class InMemoryConnectionSettingsStore : IConnectionSettingsStore
+    {
+        private ServiceBusConnectionOptions? _settings;
+
+        public bool HasRuntimeSettings => _settings is not null;
+
+        public ServiceBusConnectionOptions? GetRuntimeSettings() => _settings;
+
+        public Task SaveAsync(ServiceBusConnectionOptions settings)
+        {
+            _settings = settings;
+            return Task.CompletedTask;
+        }
+
+        public Task ClearAsync()
+        {
+            _settings = null;
+            return Task.CompletedTask;
+        }
+    }
+
     private class StubExplorerService(ExplorerLoadResult result) : IExplorerService
     {
         public Task<ExplorerLoadResult> LoadAsync(CancellationToken ct = default) => Task.FromResult(result);
@@ -29,9 +50,16 @@ public class HomeTests : TestContext
         Services.AddFluentUIComponents();
         Services.AddLogging();
 
-        var factoryOptions = MsOptions.Create(new ServiceBusConnectionOptions());
+        var factoryOptions = MsOptions.Create(new ServiceBusConnectionOptions
+        {
+            ConnectionString = "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=dummy"
+        });
         Services.AddSingleton<IOptions<ServiceBusConnectionOptions>>(factoryOptions);
-        Services.AddSingleton(new ServiceBusClientFactory(factoryOptions, NullLogger<ServiceBusClientFactory>.Instance));
+        Services.AddSingleton<IConnectionSettingsStore, InMemoryConnectionSettingsStore>();
+        Services.AddSingleton(sp => new ServiceBusClientFactory(
+            factoryOptions,
+            sp.GetRequiredService<IConnectionSettingsStore>(),
+            NullLogger<ServiceBusClientFactory>.Instance));
         Services.AddScoped<IExplorerService>(_ => new StubExplorerService(loadResult ?? new ExplorerLoadResult()));
         Services.AddScoped<MessageSenderService>();
         Services.AddScoped<MessageBrowserService>();
@@ -65,7 +93,11 @@ public class HomeTests : TestContext
 
         var cut = RenderComponent<Home>();
 
-        cut.WaitForAssertion(() => cut.Markup.Should().Contain("Select a queue, topic, or subscription"));
+        cut.WaitForAssertion(() =>
+        {
+            cut.Markup.Should().NotContain("my-queue</h2>");
+            cut.Markup.Should().MatchRegex("Select a queue, topic, or subscription|No Azure Service Bus connection is configured");
+        });
     }
 
     [Fact]
