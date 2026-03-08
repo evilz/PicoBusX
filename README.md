@@ -6,6 +6,16 @@ Built with **Aspire 13.1.2** for local development orchestration and **Microsoft
 
 ![PicoBusX Dashboard](https://github.com/user-attachments/assets/cc13c01d-4860-4701-b6db-1b59db5968d3)
 
+## Screenshots
+
+### Runtime Connection Setup
+
+![PicoBusX Connection Setup - Unconfigured State](https://github.com/user-attachments/assets/71bf20c1-578d-4e6a-bd61-8ad126052075)
+
+![PicoBusX Connection Setup - Connection String](https://github.com/user-attachments/assets/d9d40979-578e-4f84-bcb8-3889029d35b3)
+
+![PicoBusX Connection Setup - Service Principal](https://github.com/user-attachments/assets/ff59249b-f69b-4d6f-957c-7276b2dabb29)
+
 ---
 
 ## Features

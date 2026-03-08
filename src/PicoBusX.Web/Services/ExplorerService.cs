@@ -246,10 +246,17 @@ public class ExplorerService(
 
     private static bool TryBuildUserFacingError(Exception ex, out string message)
     {
-        if (ex is InvalidOperationException invalidOperationException &&
-            invalidOperationException.Message.Contains("connection string", StringComparison.OrdinalIgnoreCase))
+        if (ex is InvalidOperationException ioe &&
+            (ioe.Message.Contains("connection string", StringComparison.OrdinalIgnoreCase) ||
+             ioe.Message.Contains("not configured", StringComparison.OrdinalIgnoreCase)))
         {
-            message = "Service Bus is not configured. Set a valid connection string for this application instance.";
+            message = "Service Bus is not configured. Configure the connection in Settings.";
+            return true;
+        }
+
+        if (ex is Azure.Identity.AuthenticationFailedException)
+        {
+            message = "Azure authentication failed. Verify your managed identity or service principal credentials in Settings.";
             return true;
         }
 
