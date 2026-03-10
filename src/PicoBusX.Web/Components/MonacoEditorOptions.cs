@@ -29,11 +29,9 @@ internal static class MonacoEditorOptions
         };
     }
 
-    private static bool IsJson(string value)
+    internal static bool IsJson(string value)
     {
-        var trimmed = value.AsSpan().TrimStart();
-        if (trimmed.IsEmpty) return false;
-        if (trimmed[0] is not '{' and not '[') return false;
+        if (string.IsNullOrWhiteSpace(value)) return false;
         try
         {
             System.Text.Json.JsonDocument.Parse(value);
