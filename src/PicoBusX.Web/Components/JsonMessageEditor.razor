@@ -8,9 +8,9 @@
                          Placeholder="queue-name or topic-name"
                          Style="width: 100%;" />
 
-        <div>
+        <div style="width:100%">
             <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">JSON Payload</FluentLabel>
-            <div style="border: 1px solid var(--neutral-stroke-rest); border-radius: 4px; overflow: hidden; @(_jsonError != null ? "border-color: #dc2626;" : "")">
+            <div style="width:100%; border: 1px solid var(--neutral-stroke-rest); border-radius: 4px; overflow: hidden; @(_jsonError != null ? "border-color: #dc2626;" : "")">
                 <StandaloneCodeEditor @ref="_editor"
                                       Id="json-payload-editor"
                                       ConstructionOptions="EditorConstructionOptions"
