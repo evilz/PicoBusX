@@ -8,25 +8,14 @@
                          Placeholder="queue-name or topic-name"
                          Style="width: 100%;" />
 
-        <div>
+        <div style="width:100%">
             <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">JSON Payload</FluentLabel>
-            <FluentStack Orientation="Orientation.Horizontal" Style="gap: 0.5rem; margin-bottom: 0.5rem;">
-                <FluentButton Appearance="Appearance.Outline" OnClick="FormatJson" Title="Format JSON">
-                    Format
-                </FluentButton>
-                <FluentButton Appearance="Appearance.Outline" OnClick="MinifyJson" Title="Minify JSON">
-                    Minify
-                </FluentButton>
-                <FluentButton Appearance="Appearance.Outline" OnClick="ValidateJson" Title="Validate JSON">
-                    Validate
-                </FluentButton>
-            </FluentStack>
-            <textarea @bind="_jsonPayload"
-                      rows="10"
-                      class="json-editor @(_jsonError != null ? "editor-error" : "")"
-                      placeholder="{}"
-                      spellcheck="false"
-                      style="width: 100%; box-sizing: border-box;"></textarea>
+            <div style="width:100%; border: 1px solid var(--neutral-stroke-rest); border-radius: 4px; overflow: hidden; @(_jsonError != null ? "border-color: #dc2626;" : "")">
+                <StandaloneCodeEditor @ref="_editor"
+                                      Id="json-payload-editor"
+                                      ConstructionOptions="EditorConstructionOptions"
+                                      CssClass="monaco-editor-host" />
+            </div>
             @if (_jsonError is not null)
             {
                 <FluentMessageBar Intent="MessageIntent.Error" Style="margin-top: 0.25rem;">@_jsonError</FluentMessageBar>
@@ -113,6 +102,7 @@
     [Parameter] public string? SendResult { get; set; }
     [Parameter] public string? SendError { get; set; }
 
+    private StandaloneCodeEditor? _editor;
     private string _destination = string.Empty;
     private string _jsonPayload = "{\n  \n}";
     private string? _subject;
@@ -124,46 +114,33 @@
     private bool _jsonValid;
     private List<AppProp> _appProps = new();
 
+    private StandaloneEditorConstructionOptions EditorConstructionOptions(StandaloneCodeEditor editor)
+    {
+        return new StandaloneEditorConstructionOptions
+        {
+            AutomaticLayout = true,
+            Language = "json",
+            Value = _jsonPayload,
+            Theme = "vs-dark",
+            Minimap = new EditorMinimapOptions { Enabled = false },
+            ScrollBeyondLastLine = false,
+            FontSize = 13,
+            LineNumbers = "on",
+            RoundedSelection = false,
+            WordWrap = "on"
+        };
+    }
+
     protected override void OnParametersSet()
     {
         if (!string.IsNullOrEmpty(Destination) && string.IsNullOrEmpty(_destination))
             _destination = Destination;
     }
 
-    private void FormatJson()
+    private async Task ValidateJson()
     {
-        try
-        {
-            var doc = System.Text.Json.JsonDocument.Parse(_jsonPayload);
-            _jsonPayload = System.Text.Json.JsonSerializer.Serialize(doc.RootElement, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-            _jsonError = null;
-            _jsonValid = true;
-        }
-        catch (System.Text.Json.JsonException ex)
-        {
-            _jsonError = ex.Message;
-            _jsonValid = false;
-        }
-    }
-
-    private void MinifyJson()
-    {
-        try
-        {
-            var doc = System.Text.Json.JsonDocument.Parse(_jsonPayload);
-            _jsonPayload = System.Text.Json.JsonSerializer.Serialize(doc.RootElement);
-            _jsonError = null;
-            _jsonValid = true;
-        }
-        catch (System.Text.Json.JsonException ex)
-        {
-            _jsonError = ex.Message;
-            _jsonValid = false;
-        }
-    }
-
-    private void ValidateJson()
-    {
+        if (_editor is not null)
+            _jsonPayload = await _editor.GetValue();
         try
         {
             System.Text.Json.JsonDocument.Parse(_jsonPayload);
@@ -179,7 +156,7 @@
 
     private async Task HandleSend()
     {
-        ValidateJson();
+        await ValidateJson();
         if (_jsonError is not null) return;
 
         var request = new SendMessageRequest

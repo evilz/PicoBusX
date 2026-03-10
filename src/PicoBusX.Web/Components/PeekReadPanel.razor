@@ -36,9 +36,9 @@
         <FluentStack Orientation="Orientation.Vertical" Style="gap: 0.5rem;">
             @foreach (var (msg, idx) in Messages.Select((m, i) => (m, i)))
             {
-                var isExpanded = _expanded.Contains(idx);
-                <FluentCard Style="padding: 0; overflow: hidden;">
-                    <div class="message-header" @onclick="() => ToggleMessage(idx)" style="cursor: pointer; padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.75rem; user-select: none;">
+                var isExpanded = _expanded.Contains(msg.SequenceNumber);
+                <FluentCard @key="msg.SequenceNumber" Style="padding: 0; overflow: hidden;">
+                    <div class="message-header" @onclick="() => ToggleMessage(msg.SequenceNumber)" style="cursor: pointer; padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.75rem; user-select: none;">
                         <span style="color: var(--neutral-foreground-hint); font-size: 0.75rem; min-width: 24px;">#@(idx + 1)</span>
                         <span style="font-family: monospace; font-size: 0.8rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@(msg.MessageId ?? "—")</span>
                         <span style="color: var(--neutral-foreground-hint); font-size: 0.78rem;">@msg.EnqueuedTime.ToString("HH:mm:ss")</span>
@@ -77,7 +77,11 @@
 
                             <div>
                                 <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">Body</FluentLabel>
-                                <pre class="body-pre">@PrettyPrint(msg.Body)</pre>
+                                <div style="border: 1px solid var(--neutral-stroke-rest); border-radius: 4px; overflow: hidden;">
+                                    <StandaloneCodeEditor Id="@($"peek-body-{msg.SequenceNumber}")"
+                                                          ConstructionOptions="@(e => MonacoEditorOptions.ReadOnly(e, PrettyPrint(msg.Body)))"
+                                                          CssClass="monaco-editor-host monaco-editor-readonly" />
+                                </div>
                             </div>
                         </div>
                     }
@@ -103,7 +107,7 @@
     [Parameter] public string? ErrorMessage { get; set; }
 
     private int _maxCount;
-    private HashSet<int> _expanded = new();
+    private HashSet<long> _expanded = new();
 
     protected override void OnInitialized()
     {
@@ -118,10 +122,10 @@
     private async Task DoPeek() => await OnPeek.InvokeAsync((EntityPath, _maxCount));
     private async Task DoReceive() => await OnReceive.InvokeAsync((EntityPath, _maxCount));
 
-    private void ToggleMessage(int idx)
+    private void ToggleMessage(long sequenceNumber)
     {
-        if (_expanded.Contains(idx)) _expanded.Remove(idx);
-        else _expanded.Add(idx);
+        if (_expanded.Contains(sequenceNumber)) _expanded.Remove(sequenceNumber);
+        else _expanded.Add(sequenceNumber);
     }
 
     private static string PrettyPrint(string body)
