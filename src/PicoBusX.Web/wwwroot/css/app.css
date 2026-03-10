@@ -1086,3 +1086,13 @@ fluent-dialog#chat-modal-dialog fluent-button[appearance=stealth]:not(:hover)::p
         max-height: 45vh;
     }
 }
+
+/* Monaco Editor host containers */
+.monaco-editor-host {
+    height: 300px;
+    width: 100%;
+}
+
+.monaco-editor-readonly {
+    height: 200px;
+}

@@ -73,7 +73,11 @@
 
                             <div style="margin-bottom: 0.75rem;">
                                 <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">Body</FluentLabel>
-                                <pre class="body-pre">@PrettyPrint(msg.Body)</pre>
+                                <div style="border: 1px solid var(--neutral-stroke-rest); border-radius: 4px; overflow: hidden;">
+                                    <StandaloneCodeEditor Id="@($"dlq-body-{idx}")"
+                                                          ConstructionOptions="@(e => MonacoEditorOptions.ReadOnly(e, PrettyPrint(msg.Body)))"
+                                                          CssClass="monaco-editor-host monaco-editor-readonly" />
+                                </div>
                             </div>
 
                             <FluentButton Appearance="Appearance.Accent"
