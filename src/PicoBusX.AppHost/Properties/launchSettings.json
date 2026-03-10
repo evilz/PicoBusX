@@ -8,7 +8,10 @@
       "applicationUrl": "http://localhost:5000",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:4317"
+        "DOTNET_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:4317",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:18889",
+        "ASPIRE_DASHBOARD_MCP_ENDPOINT_URL": "http://localhost:18888/mcp",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:17009"
       }
     }
   }
