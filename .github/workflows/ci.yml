@@ -16,6 +16,7 @@ env:
   CONFIGURATION: Release
   SOLUTION_PATH: PicoBusX.slnx
   WEB_PROJECT_PATH: src/PicoBusX.Web/PicoBusX.Web.csproj
+  CONTAINER_RUNTIME: linux-x64
 
 jobs:
   build-and-test:
@@ -70,8 +71,9 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Restore web project
-        run: dotnet restore ${{ env.WEB_PROJECT_PATH }}
+      # This job starts from a clean workspace, so restore with the same RID used by PublishContainer.
+      - name: Restore web project for container runtime
+        run: dotnet restore ${{ env.WEB_PROJECT_PATH }} --runtime ${{ env.CONTAINER_RUNTIME }}
 
       - name: Compute image metadata
         id: image
@@ -109,8 +111,7 @@ jobs:
           for image_tag in ${IMAGE_TAGS}; do
             dotnet publish ${{ env.WEB_PROJECT_PATH }} \
               --configuration ${{ env.CONFIGURATION }} \
-              --os linux \
-              --arch x64 \
+              --runtime ${{ env.CONTAINER_RUNTIME }} \
               --no-restore \
               /t:PublishContainer \
               -p:ContinuousIntegrationBuild=true \
