@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <EnableSdkContainerSupport>true</EnableSdkContainerSupport>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,10 +16,9 @@
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="4.14.0" />
   </ItemGroup>
 
-  <!-- .NET SDK Container Publishing support -->
-  <!-- Use: dotnet publish -c Release  -p:PublishProfile=DefaultContainer -->
+  <!-- Keep a stable local repository name; CI overrides registry, repository and tags when publishing. -->
   <PropertyGroup>
-    <ContainerImageName>picobusx</ContainerImageName>
+    <ContainerRepository>picobusx</ContainerRepository>
   </PropertyGroup>
 
 </Project>

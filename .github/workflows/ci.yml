@@ -3,6 +3,7 @@ name: CI/CD
 on:
   push:
     branches: [main, master]
+    tags: ['v*']
   pull_request:
     branches: [main, master]
   workflow_dispatch:
@@ -10,10 +11,17 @@ on:
 permissions:
   contents: read
 
+env:
+  DOTNET_NOLOGO: true
+  CONFIGURATION: Release
+  SOLUTION_PATH: PicoBusX.slnx
+  WEB_PROJECT_PATH: src/PicoBusX.Web/PicoBusX.Web.csproj
+
 jobs:
   build-and-test:
     name: Build & Test
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,24 +29,20 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: 10.0.x
 
-      - name: Restore – web project
-        run: dotnet restore src/PicoBusX.Web/PicoBusX.Web.csproj
+      # Build the actual solution so CI follows the same project graph as local development.
+      - name: Restore solution
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
 
-      - name: Restore – test project
-        run: dotnet restore tests/PicoBusX.Web.Tests/PicoBusX.Web.Tests.csproj
+      - name: Build solution
+        run: dotnet build ${{ env.SOLUTION_PATH }} --configuration ${{ env.CONFIGURATION }} --no-restore -p:ContinuousIntegrationBuild=true
 
-      - name: Build
-        run: dotnet build src/PicoBusX.Web/PicoBusX.Web.csproj --no-restore -c Release
+      - name: Test web project
+        run: dotnet test tests/PicoBusX.Web.Tests/PicoBusX.Web.Tests.csproj --configuration ${{ env.CONFIGURATION }} --no-build --logger "trx;LogFileName=web-tests.trx" --results-directory TestResults
 
-      - name: Test
-        run: |
-          dotnet test tests/PicoBusX.Web.Tests/PicoBusX.Web.Tests.csproj \
-            --no-restore \
-            -c Release \
-            --logger "trx;LogFileName=test-results.trx" \
-            --results-directory TestResults
+      - name: Test AppHost project
+        run: dotnet test tests/PicoBusX.AppHost.Tests/PicoBusX.AppHost.Tests.csproj --configuration ${{ env.CONFIGURATION }} --no-build --logger "trx;LogFileName=apphost-tests.trx" --results-directory TestResults
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -48,46 +52,11 @@ jobs:
           path: TestResults/
           retention-days: 7
 
-  docker-build-pr:
-    name: Docker Build (PR)
+  publish-web-container:
+    name: Publish Web Container
     runs-on: ubuntu-latest
     needs: build-and-test
-    if: github.event_name == 'pull_request'
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/picobusx
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
-
-      - name: Build image (no push on PR)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: false
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  docker-publish:
-    name: Docker Build & Push
-    runs-on: ubuntu-latest
-    needs: build-and-test
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
     permissions:
       contents: read
       packages: write
@@ -96,32 +65,50 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
 
-      - name: Log in to GitHub Container Registry
+      - name: Restore web project
+        run: dotnet restore ${{ env.WEB_PROJECT_PATH }}
+
+      - name: Compute image metadata
+        id: image
+        shell: bash
+        run: |
+          OWNER_LOWER="${GITHUB_REPOSITORY_OWNER,,}"
+          SHORT_SHA="${GITHUB_SHA::7}"
+
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAGS="${GITHUB_REF_NAME};sha-${SHORT_SHA}"
+          elif [[ "${GITHUB_REF}" == "refs/heads/master" ]]; then
+            TAGS="master;latest;sha-${SHORT_SHA}"
+          else
+            TAGS="main;latest;sha-${SHORT_SHA}"
+          fi
+
+          echo "repository=${OWNER_LOWER}/picobusx" >> "$GITHUB_OUTPUT"
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+
+      # dotnet PublishContainer does the image build/push; login only provides GHCR credentials.
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/picobusx
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
-
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Publish container image with .NET SDK
+        run: |
+          dotnet publish ${{ env.WEB_PROJECT_PATH }} \
+            --configuration ${{ env.CONFIGURATION }} \
+            --os linux \
+            --arch x64 \
+            --no-restore \
+            /t:PublishContainer \
+            -p:ContinuousIntegrationBuild=true \
+            -p:EnableSdkContainerSupport=true \
+            -p:ContainerRegistry=ghcr.io \
+            -p:ContainerRepository=${{ steps.image.outputs.repository }} \
+            "-p:ContainerImageTags=${{ steps.image.outputs.tags }}"
