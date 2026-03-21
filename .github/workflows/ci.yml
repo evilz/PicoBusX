@@ -81,11 +81,11 @@ jobs:
           SHORT_SHA="${GITHUB_SHA::7}"
 
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            TAGS="${GITHUB_REF_NAME};sha-${SHORT_SHA}"
+            TAGS="${GITHUB_REF_NAME} sha-${SHORT_SHA}"
           elif [[ "${GITHUB_REF}" == "refs/heads/master" ]]; then
-            TAGS="master;latest;sha-${SHORT_SHA}"
+            TAGS="master latest sha-${SHORT_SHA}"
           else
-            TAGS="main;latest;sha-${SHORT_SHA}"
+            TAGS="main latest sha-${SHORT_SHA}"
           fi
 
           echo "repository=${OWNER_LOWER}/picobusx" >> "$GITHUB_OUTPUT"
@@ -100,15 +100,22 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish container image with .NET SDK
+        shell: bash
+        env:
+          IMAGE_REPOSITORY: ${{ steps.image.outputs.repository }}
+          IMAGE_TAGS: ${{ steps.image.outputs.tags }}
         run: |
-          dotnet publish ${{ env.WEB_PROJECT_PATH }} \
-            --configuration ${{ env.CONFIGURATION }} \
-            --os linux \
-            --arch x64 \
-            --no-restore \
-            /t:PublishContainer \
-            -p:ContinuousIntegrationBuild=true \
-            -p:EnableSdkContainerSupport=true \
-            -p:ContainerRegistry=ghcr.io \
-            -p:ContainerRepository=${{ steps.image.outputs.repository }} \
-            "-p:ContainerImageTags=${{ steps.image.outputs.tags }}"
+          # Publish once per tag because the CLI parsing for semicolon-delimited ContainerImageTags is brittle in CI shells.
+          for image_tag in ${IMAGE_TAGS}; do
+            dotnet publish ${{ env.WEB_PROJECT_PATH }} \
+              --configuration ${{ env.CONFIGURATION }} \
+              --os linux \
+              --arch x64 \
+              --no-restore \
+              /t:PublishContainer \
+              -p:ContinuousIntegrationBuild=true \
+              -p:EnableSdkContainerSupport=true \
+              -p:ContainerRegistry=ghcr.io \
+              "-p:ContainerRepository=${IMAGE_REPOSITORY}" \
+              "-p:ContainerImageTags=${image_tag}"
+          done
