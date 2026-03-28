@@ -133,7 +133,7 @@
         if (string.IsNullOrWhiteSpace(body)) return "(empty)";
         try
         {
-            var doc = System.Text.Json.JsonDocument.Parse(body);
+            using var doc = System.Text.Json.JsonDocument.Parse(body);
             return System.Text.Json.JsonSerializer.Serialize(doc.RootElement, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
         }
         catch

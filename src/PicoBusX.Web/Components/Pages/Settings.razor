@@ -277,7 +277,21 @@
 
     private async Task ClearSettingsAsync()
     {
-        await SettingsStore.ClearAsync();
+        try
+        {
+            await SettingsStore.ClearAsync();
+        }
+        catch (IOException ex)
+        {
+            ToastService.ShowError($"Failed to clear saved settings: {ex.Message}");
+            return;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            ToastService.ShowError($"Failed to clear saved settings: {ex.Message}");
+            return;
+        }
+
         await Factory.ResetClientsAsync();
         ToastService.ShowInfo("Saved settings cleared. The application will now use settings from environment variables or appsettings.json.");
         Nav.NavigateTo("/settings", replace: true);

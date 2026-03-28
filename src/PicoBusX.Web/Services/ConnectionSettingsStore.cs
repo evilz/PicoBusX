@@ -38,10 +38,17 @@ public sealed class ConnectionSettingsStore : IConnectionSettingsStore
             await File.WriteAllTextAsync(_settingsFilePath, json);
             _logger.LogInformation("Connection settings saved to {Path}", _settingsFilePath);
         }
-        catch (Exception ex)
+        catch (IOException ex)
         {
-            _logger.LogWarning(ex,
+            _logger.LogError(ex,
                 "Failed to persist connection settings to file; settings are in memory only for this session.");
+            throw;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogError(ex,
+                "Failed to persist connection settings to file; settings are in memory only for this session.");
+            throw;
         }
     }
 
@@ -53,9 +60,15 @@ public sealed class ConnectionSettingsStore : IConnectionSettingsStore
             if (File.Exists(_settingsFilePath))
                 File.Delete(_settingsFilePath);
         }
-        catch (Exception ex)
+        catch (IOException ex)
         {
-            _logger.LogWarning(ex, "Failed to delete persisted connection settings file.");
+            _logger.LogError(ex, "Failed to delete persisted connection settings file.");
+            throw;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogError(ex, "Failed to delete persisted connection settings file.");
+            throw;
         }
 
         return Task.CompletedTask;
@@ -70,7 +83,15 @@ public sealed class ConnectionSettingsStore : IConnectionSettingsStore
             _runtimeSettings = JsonSerializer.Deserialize<ServiceBusConnectionOptions>(json);
             _logger.LogInformation("Loaded runtime connection settings from {Path}", _settingsFilePath);
         }
-        catch (Exception ex)
+        catch (IOException ex)
+        {
+            _logger.LogWarning(ex, "Failed to load persisted connection settings from {Path}", _settingsFilePath);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Failed to load persisted connection settings from {Path}", _settingsFilePath);
+        }
+        catch (JsonException ex)
         {
             _logger.LogWarning(ex, "Failed to load persisted connection settings from {Path}", _settingsFilePath);
         }

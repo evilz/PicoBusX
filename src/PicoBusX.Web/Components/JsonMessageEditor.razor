@@ -52,7 +52,7 @@
 
                     <div>
                         <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.5rem;">Application Properties</FluentLabel>
-                        @foreach (var (key, idx) in _appProps.Select((p, i) => (p, i)))
+                        @foreach (var (_, idx) in _appProps.Select((p, i) => (p, i)))
                         {
                             <FluentStack Orientation="Orientation.Horizontal" Style="gap: 0.5rem; margin-bottom: 0.4rem; align-items: flex-end;">
                                 <FluentTextField Placeholder="Key" @bind-Value="_appProps[idx].Key" Style="flex: 1;" />
@@ -143,7 +143,7 @@
             _jsonPayload = await _editor.GetValue();
         try
         {
-            System.Text.Json.JsonDocument.Parse(_jsonPayload);
+            using var _ = System.Text.Json.JsonDocument.Parse(_jsonPayload);
             _jsonError = null;
             _jsonValid = true;
         }

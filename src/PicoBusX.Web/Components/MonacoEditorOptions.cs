@@ -34,7 +34,7 @@ internal static class MonacoEditorOptions
         if (string.IsNullOrWhiteSpace(value)) return false;
         try
         {
-            System.Text.Json.JsonDocument.Parse(value);
+            using var _ = System.Text.Json.JsonDocument.Parse(value);
             return true;
         }
         catch
