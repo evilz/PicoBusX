@@ -281,12 +281,7 @@
         {
             await SettingsStore.ClearAsync();
         }
-        catch (IOException ex)
-        {
-            ToastService.ShowError($"Failed to clear saved settings: {ex.Message}");
-            return;
-        }
-        catch (UnauthorizedAccessException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             ToastService.ShowError($"Failed to clear saved settings: {ex.Message}");
             return;

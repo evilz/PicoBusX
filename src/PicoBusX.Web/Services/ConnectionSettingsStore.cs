@@ -38,16 +38,9 @@ public sealed class ConnectionSettingsStore : IConnectionSettingsStore
             await File.WriteAllTextAsync(_settingsFilePath, json);
             _logger.LogInformation("Connection settings saved to {Path}", _settingsFilePath);
         }
-        catch (IOException ex)
+        catch (Exception ex) when (IsPersistenceException(ex))
         {
-            _logger.LogError(ex,
-                "Failed to persist connection settings to file; settings are in memory only for this session.");
-            throw;
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            _logger.LogError(ex,
-                "Failed to persist connection settings to file; settings are in memory only for this session.");
+            _logger.LogError(ex, "Failed to persist connection settings to file.");
             throw;
         }
     }
@@ -60,12 +53,7 @@ public sealed class ConnectionSettingsStore : IConnectionSettingsStore
             if (File.Exists(_settingsFilePath))
                 File.Delete(_settingsFilePath);
         }
-        catch (IOException ex)
-        {
-            _logger.LogError(ex, "Failed to delete persisted connection settings file.");
-            throw;
-        }
-        catch (UnauthorizedAccessException ex)
+        catch (Exception ex) when (IsPersistenceException(ex))
         {
             _logger.LogError(ex, "Failed to delete persisted connection settings file.");
             throw;
@@ -83,11 +71,7 @@ public sealed class ConnectionSettingsStore : IConnectionSettingsStore
             _runtimeSettings = JsonSerializer.Deserialize<ServiceBusConnectionOptions>(json);
             _logger.LogInformation("Loaded runtime connection settings from {Path}", _settingsFilePath);
         }
-        catch (IOException ex)
-        {
-            _logger.LogWarning(ex, "Failed to load persisted connection settings from {Path}", _settingsFilePath);
-        }
-        catch (UnauthorizedAccessException ex)
+        catch (Exception ex) when (IsPersistenceException(ex))
         {
             _logger.LogWarning(ex, "Failed to load persisted connection settings from {Path}", _settingsFilePath);
         }
@@ -96,4 +80,12 @@ public sealed class ConnectionSettingsStore : IConnectionSettingsStore
             _logger.LogWarning(ex, "Failed to load persisted connection settings from {Path}", _settingsFilePath);
         }
     }
+
+    /// <summary>
+    /// Returns <see langword="true"/> for file-system exceptions that should be surfaced to the caller
+    /// when saving or clearing persisted connection settings.
+    /// </summary>
+    /// <param name="ex">The exception to evaluate.</param>
+    private static bool IsPersistenceException(Exception ex) =>
+        ex is IOException or UnauthorizedAccessException;
 }

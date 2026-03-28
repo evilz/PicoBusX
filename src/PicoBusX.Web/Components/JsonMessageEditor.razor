@@ -52,14 +52,14 @@
 
                     <div>
                         <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.5rem;">Application Properties</FluentLabel>
-                        @foreach (var (_, idx) in _appProps.Select((p, i) => (p, i)))
+                        @for (var i = 0; i < _appProps.Count; i++)
                         {
                             <FluentStack Orientation="Orientation.Horizontal" Style="gap: 0.5rem; margin-bottom: 0.4rem; align-items: flex-end;">
-                                <FluentTextField Placeholder="Key" @bind-Value="_appProps[idx].Key" Style="flex: 1;" />
-                                <FluentTextField Placeholder="Value" @bind-Value="_appProps[idx].Value" Style="flex: 2;" />
+                                <FluentTextField Placeholder="Key" @bind-Value="_appProps[i].Key" Style="flex: 1;" />
+                                <FluentTextField Placeholder="Value" @bind-Value="_appProps[i].Value" Style="flex: 2;" />
                                 <FluentButton Appearance="Appearance.Outline"
                                               IconStart="@(new Icons.Regular.Size16.Dismiss())"
-                                              OnClick="() => _appProps.RemoveAt(idx)"
+                                              OnClick="() => _appProps.RemoveAt(i)"
                                               Style="color: #dc2626;" />
                             </FluentStack>
                         }
