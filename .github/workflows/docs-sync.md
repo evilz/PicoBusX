@@ -2,6 +2,7 @@
 name: Documentation Sync
 description: "Daily weekday workflow that updates stale repository documentation and opens a pull request with the fixes."
 on:
+  # gh-aw compiles this fuzzy schedule to a deterministic weekday cron plus workflow_dispatch.
   schedule: daily on weekdays
 permissions:
   contents: read
@@ -34,9 +35,9 @@ Your job is to identify markdown documentation that is out of sync with recent c
 
 You may edit only these files:
 
-- `README.md`
-- `src/PicoBusX.AppHost/README.md`
-- Markdown files under `spec/`
+- `README.md` for the main product overview and usage guidance
+- `src/PicoBusX.AppHost/README.md` for Aspire host documentation
+- Markdown files under `spec/` for detailed product and design specifications
 
 Do not modify source code, tests, project files, workflow files, images, or any other non-markdown content.
 
@@ -60,6 +61,7 @@ If the docs are already accurate, do nothing and do not open a pull request.
   - `.github/workflows/ci.yml`
 
 If activity is sparse, expand the review to the last 20 commits and the last 10 merged pull requests.
+This gives the workflow enough context without turning a daily maintenance run into a full repository audit.
 
 ### 2. Decide whether documentation drift exists
 

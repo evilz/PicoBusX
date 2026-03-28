@@ -1,1 +1,3 @@
+# Keep compiled lock files conflict-free by preferring the current branch version.
+# These files should be regenerated from the source `.md` workflow, not manually merged.
 .github/workflows/*.lock.yml linguist-generated=true merge=ours
