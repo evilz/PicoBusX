@@ -51,44 +51,12 @@ public class MessageBrowserService
     /// Iterates available sessions (with a per-session timeout) until <paramref name="maxCount"/>
     /// messages are collected or no new sessions remain.
     /// </summary>
-    public async Task<List<BrowsedMessage>> PeekSessionMessagesAsync(string entityPath, int maxCount, CancellationToken ct = default)
-    {
-        var client = _factory.GetClient();
-        var results = new List<BrowsedMessage>();
-        var seenSessions = new HashSet<string>();
-
-        while (results.Count < maxCount)
+    public Task<List<BrowsedMessage>> PeekSessionMessagesAsync(string entityPath, int maxCount, CancellationToken ct = default)
+        => IterateSessionsAsync(entityPath, maxCount, ct, async (sessionReceiver, remaining) =>
         {
-            using var sessionCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            sessionCts.CancelAfter(TimeSpan.FromSeconds(SessionAcceptTimeoutSeconds));
-
-            ServiceBusSessionReceiver? sessionReceiver;
-            try
-            {
-                sessionReceiver = await client.AcceptNextSessionAsync(entityPath, cancellationToken: sessionCts.Token);
-            }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-            {
-                break; // Timed out — no more sessions available
-            }
-            catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.ServiceTimeout)
-            {
-                break;
-            }
-
-            await using (sessionReceiver)
-            {
-                if (!seenSessions.Add(sessionReceiver.SessionId))
-                    break; // Cycled back to an already-visited session
-
-                var remaining = maxCount - results.Count;
-                var peeked = await sessionReceiver.PeekMessagesAsync(remaining, cancellationToken: ct);
-                results.AddRange(peeked.Select(MapMessage));
-            }
-        }
-
-        return results;
-    }
+            var peeked = await sessionReceiver.PeekMessagesAsync(remaining, cancellationToken: ct);
+            return peeked.Select(MapMessage).ToList();
+        });
 
     /// <summary>
     /// Receives messages in PeekLock mode from a session-enabled entity, maps them,
@@ -96,7 +64,28 @@ public class MessageBrowserService
     /// Iterates available sessions until <paramref name="maxCount"/> messages are collected
     /// or no new sessions remain.
     /// </summary>
-    public async Task<List<BrowsedMessage>> ReceiveAndAbandonSessionAsync(string entityPath, int maxCount, CancellationToken ct = default)
+    public Task<List<BrowsedMessage>> ReceiveAndAbandonSessionAsync(string entityPath, int maxCount, CancellationToken ct = default)
+        => IterateSessionsAsync(entityPath, maxCount, ct, async (sessionReceiver, remaining) =>
+        {
+            var messages = await sessionReceiver.ReceiveMessagesAsync(remaining, maxWaitTime: TimeSpan.FromSeconds(SessionReceiveWaitSeconds), cancellationToken: ct);
+            var result = messages.Select(MapMessage).ToList();
+            foreach (var m in messages)
+            {
+                try { await sessionReceiver.AbandonMessageAsync(m, cancellationToken: ct); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to abandon session message {MessageId}", m.MessageId); }
+            }
+            return result;
+        });
+
+    /// <summary>
+    /// Iterates active sessions one at a time, calling <paramref name="processSession"/> for each,
+    /// until <paramref name="maxCount"/> messages are collected or no further sessions are available.
+    /// </summary>
+    private async Task<List<BrowsedMessage>> IterateSessionsAsync(
+        string entityPath,
+        int maxCount,
+        CancellationToken ct,
+        Func<ServiceBusSessionReceiver, int, Task<List<BrowsedMessage>>> processSession)
     {
         var client = _factory.GetClient();
         var results = new List<BrowsedMessage>();
@@ -107,7 +96,7 @@ public class MessageBrowserService
             using var sessionCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             sessionCts.CancelAfter(TimeSpan.FromSeconds(SessionAcceptTimeoutSeconds));
 
-            ServiceBusSessionReceiver? sessionReceiver;
+            ServiceBusSessionReceiver sessionReceiver;
             try
             {
                 sessionReceiver = await client.AcceptNextSessionAsync(entityPath, cancellationToken: sessionCts.Token);
@@ -126,14 +115,8 @@ public class MessageBrowserService
                 if (!seenSessions.Add(sessionReceiver.SessionId))
                     break; // Cycled back to an already-visited session
 
-                var remaining = maxCount - results.Count;
-                var messages = await sessionReceiver.ReceiveMessagesAsync(remaining, maxWaitTime: TimeSpan.FromSeconds(SessionReceiveWaitSeconds), cancellationToken: ct);
-                results.AddRange(messages.Select(MapMessage));
-                foreach (var m in messages)
-                {
-                    try { await sessionReceiver.AbandonMessageAsync(m, cancellationToken: ct); }
-                    catch (Exception ex) { _logger.LogWarning(ex, "Failed to abandon session message {MessageId}", m.MessageId); }
-                }
+                var batch = await processSession(sessionReceiver, maxCount - results.Count);
+                results.AddRange(batch);
             }
         }
 
