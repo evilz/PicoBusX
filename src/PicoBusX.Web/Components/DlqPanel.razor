@@ -1,4 +1,5 @@
 @using PicoBusX.Web.Models
+@inherits MessagePanelBase
 
 <div class="peek-panel">
     <FluentCard Style="margin-bottom: 1rem;">
@@ -104,26 +105,13 @@
 
 @code {
     [Parameter] public string EntityPath { get; set; } = string.Empty;
-    [Parameter] public int DefaultMaxCount { get; set; } = 10;
     [Parameter] public EventCallback<(string entityPath, int maxCount)> OnPeek { get; set; }
     [Parameter] public EventCallback<long> OnResubmit { get; set; }
     [Parameter] public List<BrowsedMessage> Messages { get; set; } = new();
     [Parameter] public bool IsBusy { get; set; }
     [Parameter] public string? ErrorMessage { get; set; }
 
-    private int _maxCount;
-    private HashSet<long> _expanded = new();
     private HashSet<long> _resubmitting = new();
-
-    protected override void OnInitialized()
-    {
-        _maxCount = DefaultMaxCount > 0 ? DefaultMaxCount : 10;
-    }
-
-    protected override void OnParametersSet()
-    {
-        if (_maxCount == 0) _maxCount = DefaultMaxCount > 0 ? DefaultMaxCount : 10;
-    }
 
     private async Task DoPeek() => await OnPeek.InvokeAsync((EntityPath, _maxCount));
 
@@ -138,26 +126,6 @@
         finally
         {
             _resubmitting.Remove(sequenceNumber);
-        }
-    }
-
-    private void ToggleMessage(long sequenceNumber)
-    {
-        if (_expanded.Contains(sequenceNumber)) _expanded.Remove(sequenceNumber);
-        else _expanded.Add(sequenceNumber);
-    }
-
-    private static string PrettyPrint(string body)
-    {
-        if (string.IsNullOrWhiteSpace(body)) return "(empty)";
-        try
-        {
-            var doc = System.Text.Json.JsonDocument.Parse(body);
-            return System.Text.Json.JsonSerializer.Serialize(doc.RootElement, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-        }
-        catch
-        {
-            return body;
         }
     }
 }
