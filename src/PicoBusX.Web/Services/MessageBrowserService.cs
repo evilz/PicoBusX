@@ -22,7 +22,7 @@ public class MessageBrowserService
         var client = _factory.GetClient();
         await using var receiver = client.CreateReceiver(entityPath);
         var peeked = await receiver.PeekMessagesAsync(maxCount, cancellationToken: ct);
-        return peeked.Select(MapMessage).ToList();
+        return peeked.Select(m => MapMessage(m, _logger)).ToList();
     }
 
     /// <summary>
@@ -36,7 +36,7 @@ public class MessageBrowserService
             ReceiveMode = ServiceBusReceiveMode.PeekLock
         });
         var messages = await receiver.ReceiveMessagesAsync(maxCount, maxWaitTime: TimeSpan.FromSeconds(5), cancellationToken: ct);
-        var result = messages.Select(MapMessage).ToList();
+        var result = messages.Select(m => MapMessage(m, _logger)).ToList();
         // Abandon all locks so messages are returned to the queue immediately.
         foreach (var m in messages)
         {
@@ -51,11 +51,11 @@ public class MessageBrowserService
     /// Iterates available sessions (with a per-session timeout) until <paramref name="maxCount"/>
     /// messages are collected or no new sessions remain.
     /// </summary>
-    public Task<List<BrowsedMessage>> PeekSessionMessagesAsync(string entityPath, int maxCount, CancellationToken ct = default)
-        => IterateSessionsAsync(entityPath, maxCount, ct, async (sessionReceiver, remaining) =>
+    public static Task<List<BrowsedMessage>> PeekSessionMessagesAsync(ServiceBusClient client, string entityPath, int maxCount, CancellationToken ct = default)
+        => IterateSessionsAsync(client, entityPath, maxCount, ct, async (sessionReceiver, remaining) =>
         {
             var peeked = await sessionReceiver.PeekMessagesAsync(remaining, cancellationToken: ct);
-            return peeked.Select(MapMessage).ToList();
+            return peeked.Select(m => MapMessage(m)).ToList();
         });
 
     /// <summary>
@@ -65,10 +65,10 @@ public class MessageBrowserService
     /// or no new sessions remain.
     /// </summary>
     public Task<List<BrowsedMessage>> ReceiveAndAbandonSessionAsync(string entityPath, int maxCount, CancellationToken ct = default)
-        => IterateSessionsAsync(entityPath, maxCount, ct, async (sessionReceiver, remaining) =>
+        => IterateSessionsAsync(_factory.GetClient(), entityPath, maxCount, ct, async (sessionReceiver, remaining) =>
         {
             var messages = await sessionReceiver.ReceiveMessagesAsync(remaining, maxWaitTime: TimeSpan.FromSeconds(SessionReceiveWaitSeconds), cancellationToken: ct);
-            var result = messages.Select(MapMessage).ToList();
+            var result = messages.Select(m => MapMessage(m, _logger)).ToList();
             foreach (var m in messages)
             {
                 try { await sessionReceiver.AbandonMessageAsync(m, cancellationToken: ct); }
@@ -81,13 +81,13 @@ public class MessageBrowserService
     /// Iterates active sessions one at a time, calling <paramref name="processSession"/> for each,
     /// until <paramref name="maxCount"/> messages are collected or no further sessions are available.
     /// </summary>
-    private async Task<List<BrowsedMessage>> IterateSessionsAsync(
+    private static async Task<List<BrowsedMessage>> IterateSessionsAsync(
+        ServiceBusClient client,
         string entityPath,
         int maxCount,
         CancellationToken ct,
         Func<ServiceBusSessionReceiver, int, Task<List<BrowsedMessage>>> processSession)
     {
-        var client = _factory.GetClient();
         var results = new List<BrowsedMessage>();
         var seenSessions = new HashSet<string>();
 
@@ -132,7 +132,7 @@ public class MessageBrowserService
             ReceiveMode = ServiceBusReceiveMode.PeekLock
         });
         var peeked = await receiver.PeekMessagesAsync(maxCount, cancellationToken: ct);
-        return peeked.Select(MapMessage).ToList();
+        return peeked.Select(m => MapMessage(m, _logger)).ToList();
     }
 
     public async Task ResubmitDeadLetterAsync(string entityPath, long sequenceNumber, CancellationToken ct = default)
@@ -183,11 +183,11 @@ public class MessageBrowserService
         _logger.LogInformation("Resubmitted message {SequenceNumber} from DLQ {EntityPath} to {ResendTo}", sequenceNumber, entityPath, resendTo);
     }
 
-    private BrowsedMessage MapMessage(ServiceBusReceivedMessage m)
+    private static BrowsedMessage MapMessage(ServiceBusReceivedMessage m, ILogger? logger = null)
     {
         string body = string.Empty;
         try { body = m.Body?.ToString() ?? string.Empty; }
-        catch (Exception ex) { _logger.LogWarning(ex, "Failed to read body of message {MessageId}", m.MessageId); body = "(error reading body)"; }
+        catch (Exception ex) { logger?.LogWarning(ex, "Failed to read body of message {MessageId}", m.MessageId); body = "(error reading body)"; }
         return new BrowsedMessage
         {
             MessageId = m.MessageId,

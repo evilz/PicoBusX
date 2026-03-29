@@ -431,7 +431,7 @@
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             _browsedMessages = IsSessionEnabled()
-                ? await Browser.PeekSessionMessagesAsync(args.entityPath, args.maxCount, cts.Token)
+                ? await MessageBrowserService.PeekSessionMessagesAsync(Factory.GetClient(), args.entityPath, args.maxCount, cts.Token)
                 : await Browser.PeekMessagesAsync(args.entityPath, args.maxCount, cts.Token);
         }
         catch (Exception ex)
