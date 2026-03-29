@@ -175,7 +175,7 @@ src/
 - **No dead-letter browser** — to peek DLQ, set entity path to `<queue>/$DeadLetterQueue`
 - **No message filtering** — peek returns next N messages from the head of the queue/subscription
 - **No reconnect / retry UI** — restart the app if the connection string changes
-- **Sessions** — session-aware entities require session-based receivers (not yet implemented)
+- **Sessions** — session-enabled queues/subscriptions are browsed via session receivers; multiple sessions are sampled up to the requested message count
 
 ---
 

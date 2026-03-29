@@ -411,6 +411,16 @@
         }
     }
 
+    private bool IsSessionEnabled() => _selectedEntity?.Type switch
+    {
+        BusEntityType.Queue => _queues.FirstOrDefault(q => q.Name == _selectedEntity.Name)?.RequiresSession ?? false,
+        BusEntityType.Subscription => _topics
+            .FirstOrDefault(t => t.Name == _selectedEntity.TopicName)
+            ?.Subscriptions.FirstOrDefault(s => s.Name == _selectedEntity.Name)
+            ?.RequiresSession ?? false,
+        _ => false
+    };
+
     private async Task HandlePeekAsync((string entityPath, int maxCount) args)
     {
         _browsing = true;
@@ -420,7 +430,9 @@
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            _browsedMessages = await Browser.PeekMessagesAsync(args.entityPath, args.maxCount, cts.Token);
+            _browsedMessages = IsSessionEnabled()
+                ? await Browser.PeekSessionMessagesAsync(args.entityPath, args.maxCount, cts.Token)
+                : await Browser.PeekMessagesAsync(args.entityPath, args.maxCount, cts.Token);
         }
         catch (Exception ex)
         {
@@ -442,7 +454,9 @@
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            _browsedMessages = await Browser.ReceiveAndAbandonAsync(args.entityPath, args.maxCount, cts.Token);
+            _browsedMessages = IsSessionEnabled()
+                ? await Browser.ReceiveAndAbandonSessionAsync(args.entityPath, args.maxCount, cts.Token)
+                : await Browser.ReceiveAndAbandonAsync(args.entityPath, args.maxCount, cts.Token);
         }
         catch (Exception ex)
         {

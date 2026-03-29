@@ -133,11 +133,101 @@ public class HomeTests : TestContext
         navManager.Uri.Should().Contain("topicName=orders-topic");
     }
 
+    [Fact]
+    public void IsSessionEnabled_SessionQueue_ReturnsTrue()
+    {
+        SetupServices(new ExplorerLoadResult
+        {
+            Queues = [new QueueInfo { Name = "orders-session", RequiresSession = true }],
+            Topics = []
+        });
+
+        var navManager = Services.GetRequiredService<FakeNavigationManager>();
+        navManager.NavigateTo("http://localhost/?name=orders-session&type=Queue");
+
+        var cut = RenderComponent<Home>();
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("orders-session"));
+
+        var result = InvokePrivateBoolMethod(cut.Instance, "IsSessionEnabled");
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsSessionEnabled_NonSessionQueue_ReturnsFalse()
+    {
+        SetupServices(new ExplorerLoadResult
+        {
+            Queues = [new QueueInfo { Name = "orders", RequiresSession = false }],
+            Topics = []
+        });
+
+        var navManager = Services.GetRequiredService<FakeNavigationManager>();
+        navManager.NavigateTo("http://localhost/?name=orders&type=Queue");
+
+        var cut = RenderComponent<Home>();
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("orders"));
+
+        var result = InvokePrivateBoolMethod(cut.Instance, "IsSessionEnabled");
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsSessionEnabled_SessionSubscription_ReturnsTrue()
+    {
+        var sub = new SubscriptionInfo { TopicName = "orders-topic", Name = "order-created", RequiresSession = true };
+        var topic = new TopicInfo { Name = "orders-topic", Subscriptions = [sub] };
+
+        SetupServices(new ExplorerLoadResult
+        {
+            Queues = [],
+            Topics = [topic]
+        });
+
+        var navManager = Services.GetRequiredService<FakeNavigationManager>();
+        navManager.NavigateTo("http://localhost/?name=order-created&type=Subscription&topicName=orders-topic");
+
+        var cut = RenderComponent<Home>();
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("order-created"));
+
+        var result = InvokePrivateBoolMethod(cut.Instance, "IsSessionEnabled");
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsSessionEnabled_NonSessionSubscription_ReturnsFalse()
+    {
+        var sub = new SubscriptionInfo { TopicName = "orders-topic", Name = "order-created", RequiresSession = false };
+        var topic = new TopicInfo { Name = "orders-topic", Subscriptions = [sub] };
+
+        SetupServices(new ExplorerLoadResult
+        {
+            Queues = [],
+            Topics = [topic]
+        });
+
+        var navManager = Services.GetRequiredService<FakeNavigationManager>();
+        navManager.NavigateTo("http://localhost/?name=order-created&type=Subscription&topicName=orders-topic");
+
+        var cut = RenderComponent<Home>();
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("order-created"));
+
+        var result = InvokePrivateBoolMethod(cut.Instance, "IsSessionEnabled");
+        result.Should().BeFalse();
+    }
+
     private static Task InvokePrivateMethod<TComponent>(TComponent instance, string methodName, params object[] args)
+    {
+        var result = InvokePrivateMethodCore<TComponent>(instance, methodName, args);
+        return result is Task task ? task : Task.CompletedTask;
+    }
+
+    private static bool InvokePrivateBoolMethod<TComponent>(TComponent instance, string methodName)
+        => (bool)InvokePrivateMethodCore<TComponent>(instance, methodName, [])!;
+
+    private static object? InvokePrivateMethodCore<TComponent>(TComponent instance, string methodName, object?[] args)
     {
         var method = typeof(TComponent).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException($"Method '{methodName}' not found on {typeof(TComponent).Name}.");
-        var result = method.Invoke(instance, args);
-        return result is Task task ? task : Task.CompletedTask;
+        return method.Invoke(instance, args);
     }
 }
