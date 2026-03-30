@@ -11,6 +11,12 @@ namespace PicoBusX.Web.Components;
 public abstract class MessagePanelBase : ComponentBase
 {
     [Parameter] public int DefaultMaxCount { get; set; } = 10;
+    [Parameter] public string EntityPath { get; set; } = string.Empty;
+    [Parameter] public EventCallback<(string entityPath, int maxCount, long? fromSequenceNumber)> OnPeek { get; set; }
+    [Parameter] public List<BrowsedMessage> Messages { get; set; } = new();
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public bool HasMore { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
 
     protected int _maxCount;
     protected HashSet<long> _expanded = new();
@@ -24,6 +30,14 @@ public abstract class MessagePanelBase : ComponentBase
     protected override void OnParametersSet()
     {
         if (_maxCount == 0) _maxCount = DefaultMaxCount > 0 ? DefaultMaxCount : 10;
+    }
+
+    protected async Task DoPeek() => await OnPeek.InvokeAsync((EntityPath, _maxCount, null));
+
+    protected async Task DoLoadMore()
+    {
+        var fromSeq = Messages.Count > 0 ? Messages.Max(m => m.SequenceNumber) + 1 : (long?)null;
+        await OnPeek.InvokeAsync((EntityPath, _maxCount, fromSeq));
     }
 
     protected void ToggleMessage(long sequenceNumber)
