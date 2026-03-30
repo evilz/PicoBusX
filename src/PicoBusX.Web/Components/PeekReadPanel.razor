@@ -82,45 +82,13 @@
                                 @if (!string.IsNullOrEmpty(msg.ContentType)) { <span><strong>ContentType:</strong> @msg.ContentType</span> }
                                 <span><strong>Enqueued:</strong> @msg.EnqueuedTime.ToString("yyyy-MM-dd HH:mm:ss zzz")</span>
                             </FluentStack>
-
-                            @if (msg.ApplicationProperties.Any())
-                            {
-                                <div style="margin-bottom: 0.75rem; font-size: 0.85rem;">
-                                    <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">Application Properties</FluentLabel>
-                                    <table class="details-table">
-                                        <tbody>
-                                            @foreach (var kv in msg.ApplicationProperties)
-                                            {
-                                                <tr><td>@kv.Key</td><td>@kv.Value</td></tr>
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            }
-
-                            <div>
-                                <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">Body</FluentLabel>
-                                <div style="border: 1px solid var(--neutral-stroke-rest); border-radius: 4px; overflow: hidden;">
-                                    <StandaloneCodeEditor Id="@($"peek-body-{msg.SequenceNumber}")"
-                                                          ConstructionOptions="@(e => MonacoEditorOptions.ReadOnly(e, PrettyPrint(msg.Body)))"
-                                                          CssClass="monaco-editor-host monaco-editor-readonly" />
-                                </div>
-                            </div>
+                            <MessageCard Message="@msg" EditorIdPrefix="peek-body" />
                         </div>
                     }
                 </FluentCard>
             }
         </FluentStack>
-        @if (HasMore && !IsBusy)
-        {
-            <div style="text-align: center; margin-top: 1rem;">
-                <FluentButton Appearance="Appearance.Outline"
-                              IconStart="@(new Icons.Regular.Size16.ArrowDown())"
-                              OnClick="DoLoadMore">
-                    Load More
-                </FluentButton>
-            </div>
-        }
+        <LoadMoreButton HasMore="@HasMore" IsBusy="@IsBusy" OnClick="DoLoadMore" />
     }
     else if (!IsBusy && string.IsNullOrEmpty(ErrorMessage))
     {
@@ -131,19 +99,8 @@
 </div>
 
 @code {
-    [Parameter] public string EntityPath { get; set; } = string.Empty;
-    [Parameter] public EventCallback<(string entityPath, int maxCount, long? fromSequenceNumber)> OnPeek { get; set; }
     [Parameter] public EventCallback<(string, int)> OnReceive { get; set; }
-    [Parameter] public List<BrowsedMessage> Messages { get; set; } = new();
-    [Parameter] public bool IsBusy { get; set; }
-    [Parameter] public bool HasMore { get; set; }
-    [Parameter] public string? ErrorMessage { get; set; }
 
     private async Task DoPeek() => await OnPeek.InvokeAsync((EntityPath, _maxCount, null));
     private async Task DoReceive() => await OnReceive.InvokeAsync((EntityPath, _maxCount));
-    private async Task DoLoadMore()
-    {
-        var fromSeq = Messages.Count > 0 ? Messages.Max(m => m.SequenceNumber) + 1 : (long?)null;
-        await OnPeek.InvokeAsync((EntityPath, _maxCount, fromSeq));
-    }
 }

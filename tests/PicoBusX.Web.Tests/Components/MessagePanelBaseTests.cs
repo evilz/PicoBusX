@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.AspNetCore.Components;
 using PicoBusX.Web.Components;
 using PicoBusX.Web.Models;
 
@@ -19,6 +20,7 @@ public class MessagePanelBaseTests
         public IReadOnlyList<BrowsedMessage> CallFilterMessages(List<BrowsedMessage> messages) => FilterMessages(messages);
         public void RunOnInitialized() => OnInitialized();
         public void RunOnParametersSet() => OnParametersSet();
+        public async Task CallDoLoadMore() => await DoLoadMore();
 
         protected override void BuildRenderTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder) { }
     }
@@ -230,5 +232,50 @@ public class MessagePanelBaseTests
         var result = panel.CallFilterMessages(messages);
 
         result.Should().BeEmpty();
+    }
+
+    // --- DoLoadMore ---
+
+    [Fact]
+    public async Task DoLoadMore_WithMessages_PassesMaxSequenceNumberPlusOneAsFromSeq()
+    {
+        (string, int, long?)? captured = null;
+        var receiver = new object();
+        var panel = new TestPanel
+        {
+            EntityPath = "test-queue",
+            Messages = [
+                new BrowsedMessage { SequenceNumber = 5 },
+                new BrowsedMessage { SequenceNumber = 10 },
+            ]
+        };
+        panel.RunOnInitialized();
+        panel.OnPeek = EventCallback.Factory.Create<(string, int, long?)>(receiver, args => { captured = args; });
+
+        await panel.CallDoLoadMore();
+
+        captured.Should().NotBeNull();
+        captured!.Value.Item1.Should().Be("test-queue");
+        captured.Value.Item2.Should().Be(10);
+        captured.Value.Item3.Should().Be(11);
+    }
+
+    [Fact]
+    public async Task DoLoadMore_WithNoMessages_PassesNullAsFromSeq()
+    {
+        (string, int, long?)? captured = null;
+        var receiver = new object();
+        var panel = new TestPanel
+        {
+            EntityPath = "test-queue",
+            Messages = []
+        };
+        panel.RunOnInitialized();
+        panel.OnPeek = EventCallback.Factory.Create<(string, int, long?)>(receiver, args => { captured = args; });
+
+        await panel.CallDoLoadMore();
+
+        captured.Should().NotBeNull();
+        captured!.Value.Item3.Should().BeNull();
     }
 }

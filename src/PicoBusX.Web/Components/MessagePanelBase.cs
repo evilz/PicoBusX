@@ -6,11 +6,17 @@ namespace PicoBusX.Web.Components;
 /// <summary>
 /// Abstract base class for message panel components (<see cref="PeekReadPanel"/> and <see cref="DlqPanel"/>).
 /// Provides shared state management for max message count, expand/collapse tracking,
-/// client-side message filtering, and utility formatting used by both panels.
+/// client-side message filtering, pagination, and utility formatting used by both panels.
 /// </summary>
 public abstract class MessagePanelBase : ComponentBase
 {
     [Parameter] public int DefaultMaxCount { get; set; } = 10;
+    [Parameter] public string EntityPath { get; set; } = string.Empty;
+    [Parameter] public EventCallback<(string entityPath, int maxCount, long? fromSequenceNumber)> OnPeek { get; set; }
+    [Parameter] public List<BrowsedMessage> Messages { get; set; } = new();
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public bool HasMore { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
 
     protected int _maxCount;
     protected HashSet<long> _expanded = new();
@@ -30,6 +36,12 @@ public abstract class MessagePanelBase : ComponentBase
     {
         if (_expanded.Contains(sequenceNumber)) _expanded.Remove(sequenceNumber);
         else _expanded.Add(sequenceNumber);
+    }
+
+    protected async Task DoLoadMore()
+    {
+        var fromSeq = Messages.Count > 0 ? Messages.Max(m => m.SequenceNumber) + 1 : (long?)null;
+        await OnPeek.InvokeAsync((EntityPath, _maxCount, fromSeq));
     }
 
     /// <summary>
@@ -58,7 +70,7 @@ public abstract class MessagePanelBase : ComponentBase
     private static bool ContainsIgnoreCase(string? value, string term) =>
         !string.IsNullOrEmpty(value) && value.Contains(term, StringComparison.OrdinalIgnoreCase);
 
-    protected static string PrettyPrint(string body)
+    public static string PrettyPrint(string body)
     {
         if (string.IsNullOrWhiteSpace(body)) return "(empty)";
         try
