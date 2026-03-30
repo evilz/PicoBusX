@@ -24,6 +24,9 @@ Built with **Aspire 13.1.2** for local development orchestration and **Microsoft
 - 📋 **Entity Details** — active message count, dead-letter count, lock duration, session info, timestamps
 - 📤 **Send Message** — JSON editor with Format / Minify / Validate, optional headers, application properties
 - 👁️ **Peek / Read Messages** — non-destructive peek or PeekLock receive, with expandable message cards (body pretty-printed if JSON)
+- ☠️ **Dead-Letter Queue Browser** — dedicated DLQ panel to peek and inspect dead-lettered messages
+- 🔎 **Client-side Filtering** — filter the already-fetched message list by MessageId, Subject, CorrelationId, SessionId, Body, or application properties
+- ⏬ **Load More / Pagination** — fetch additional messages beyond the initial batch using sequence-number-based continuation
 - ✅ **Connection Status** — banner showing connected/not-connected with error details
 
 ---
@@ -152,6 +155,8 @@ src/
     │   ├── BusTreeView.razor          # Collapsible tree with search
     │   ├── EntityDetailsPanel.razor   # Queue/Topic/Subscription property tables
     │   ├── JsonMessageEditor.razor    # JSON textarea editor (format/minify/validate)
+    │   ├── MessagePanelBase.cs        # Abstract base: shared state, filtering, pagination helpers
+    │   ├── DlqPanel.razor             # Dead-letter queue message browser
     │   └── PeekReadPanel.razor        # Peek / Receive message browser
     ├── Models/                        # QueueInfo, TopicInfo, BrowsedMessage, etc.
     ├── Options/
@@ -170,10 +175,7 @@ src/
 ## Known Limits
 
 - **Azure Service Bus Emulator** — ✅ Supported when running under Aspire
-- **No Azure AD / Managed Identity** support yet — only connection-string auth (SAS)
 - **Peek is non-destructive** — uses `PeekMessages`; Receive uses PeekLock and abandons immediately
-- **No dead-letter browser** — to peek DLQ, set entity path to `<queue>/$DeadLetterQueue`
-- **No message filtering** — peek returns next N messages from the head of the queue/subscription
 - **No reconnect / retry UI** — restart the app if the connection string changes
 - **Sessions** — session-enabled queues/subscriptions are browsed via session receivers; multiple sessions are sampled up to the requested message count
 
