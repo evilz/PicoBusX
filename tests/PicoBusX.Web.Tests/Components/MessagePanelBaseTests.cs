@@ -1,5 +1,6 @@
 using FluentAssertions;
 using PicoBusX.Web.Components;
+using PicoBusX.Web.Models;
 
 #pragma warning disable BL0005 // Setting [Parameter] properties directly is intentional in these unit tests
 
@@ -14,6 +15,8 @@ public class MessagePanelBaseTests
         public void CallToggleMessage(long seq) => ToggleMessage(seq);
         public bool IsExpanded(long seq) => _expanded.Contains(seq);
         public int MaxCount => _maxCount;
+        public string FilterText { get => _filterText; set => _filterText = value; }
+        public IReadOnlyList<BrowsedMessage> CallFilterMessages(List<BrowsedMessage> messages) => FilterMessages(messages);
         public void RunOnInitialized() => OnInitialized();
         public void RunOnParametersSet() => OnParametersSet();
 
@@ -95,5 +98,137 @@ public class MessagePanelBaseTests
         panel.DefaultMaxCount = 50;
         panel.RunOnParametersSet();     // _maxCount != 0, so no change
         panel.MaxCount.Should().Be(5);
+    }
+
+    // --- FilterMessages ---
+
+    private static List<BrowsedMessage> SampleMessages() =>
+    [
+        new BrowsedMessage { MessageId = "msg-001", Subject = "OrderCreated", CorrelationId = "corr-1", SessionId = "sess-A", Body = "{\"order\":1}", SequenceNumber = 1 },
+        new BrowsedMessage { MessageId = "msg-002", Subject = "ShipmentSent", CorrelationId = "corr-2", SessionId = "sess-B", Body = "plain text", SequenceNumber = 2, ApplicationProperties = new() { ["env"] = "prod" } },
+        new BrowsedMessage { MessageId = "msg-003", Subject = null, CorrelationId = null, SessionId = null, Body = string.Empty, SequenceNumber = 3 },
+    ];
+
+    [Fact]
+    public void FilterMessages_EmptyFilter_ReturnsAllMessages()
+    {
+        var panel = new TestPanel();
+        var messages = SampleMessages();
+
+        var result = panel.CallFilterMessages(messages);
+
+        result.Should().HaveCount(3);
+    }
+
+    [Theory]
+    [InlineData("   ")]
+    [InlineData("")]
+    public void FilterMessages_WhitespaceFilter_ReturnsAllMessages(string filter)
+    {
+        var panel = new TestPanel { FilterText = filter };
+        var messages = SampleMessages();
+
+        var result = panel.CallFilterMessages(messages);
+
+        result.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public void FilterMessages_MatchOnMessageId_ReturnsMatchingMessage()
+    {
+        var panel = new TestPanel { FilterText = "msg-001" };
+        var messages = SampleMessages();
+
+        var result = panel.CallFilterMessages(messages);
+
+        result.Should().ContainSingle(m => m.MessageId == "msg-001");
+    }
+
+    [Fact]
+    public void FilterMessages_MatchOnSubject_ReturnsMatchingMessages()
+    {
+        var panel = new TestPanel { FilterText = "order" };
+        var messages = SampleMessages();
+
+        var result = panel.CallFilterMessages(messages);
+
+        result.Should().ContainSingle(m => m.Subject == "OrderCreated");
+    }
+
+    [Fact]
+    public void FilterMessages_MatchIsCaseInsensitive()
+    {
+        var panel = new TestPanel { FilterText = "ORDERCREATED" };
+        var messages = SampleMessages();
+
+        var result = panel.CallFilterMessages(messages);
+
+        result.Should().ContainSingle(m => m.Subject == "OrderCreated");
+    }
+
+    [Fact]
+    public void FilterMessages_MatchOnCorrelationId_ReturnsMatchingMessage()
+    {
+        var panel = new TestPanel { FilterText = "corr-2" };
+        var messages = SampleMessages();
+
+        var result = panel.CallFilterMessages(messages);
+
+        result.Should().ContainSingle(m => m.MessageId == "msg-002");
+    }
+
+    [Fact]
+    public void FilterMessages_MatchOnSessionId_ReturnsMatchingMessage()
+    {
+        var panel = new TestPanel { FilterText = "sess-A" };
+        var messages = SampleMessages();
+
+        var result = panel.CallFilterMessages(messages);
+
+        result.Should().ContainSingle(m => m.MessageId == "msg-001");
+    }
+
+    [Fact]
+    public void FilterMessages_MatchOnBody_ReturnsMatchingMessage()
+    {
+        var panel = new TestPanel { FilterText = "plain text" };
+        var messages = SampleMessages();
+
+        var result = panel.CallFilterMessages(messages);
+
+        result.Should().ContainSingle(m => m.MessageId == "msg-002");
+    }
+
+    [Fact]
+    public void FilterMessages_MatchOnApplicationPropertyValue_ReturnsMatchingMessage()
+    {
+        var panel = new TestPanel { FilterText = "prod" };
+        var messages = SampleMessages();
+
+        var result = panel.CallFilterMessages(messages);
+
+        result.Should().ContainSingle(m => m.MessageId == "msg-002");
+    }
+
+    [Fact]
+    public void FilterMessages_MatchOnApplicationPropertyKey_ReturnsMatchingMessage()
+    {
+        var panel = new TestPanel { FilterText = "env" };
+        var messages = SampleMessages();
+
+        var result = panel.CallFilterMessages(messages);
+
+        result.Should().ContainSingle(m => m.MessageId == "msg-002");
+    }
+
+    [Fact]
+    public void FilterMessages_NoMatch_ReturnsEmptyList()
+    {
+        var panel = new TestPanel { FilterText = "zzz-no-match" };
+        var messages = SampleMessages();
+
+        var result = panel.CallFilterMessages(messages);
+
+        result.Should().BeEmpty();
     }
 }

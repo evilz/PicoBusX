@@ -9,6 +9,11 @@
                                Min="1"
                                Max="500"
                                Style="width: 120px;" />
+            <FluentTextField Label="Filter"
+                             @bind-Value="_filterText"
+                             Placeholder="MessageId, Subject, Body…"
+                             Style="flex: 1; min-width: 160px;"
+                             Disabled="@IsBusy" />
             <FluentButton Appearance="Appearance.Accent"
                           IconStart="@(new Icons.Regular.Size16.Eye())"
                           OnClick="DoPeek"
@@ -25,11 +30,19 @@
 
     @if (Messages.Any())
     {
+        var filtered = FilterMessages(Messages);
         <div style="font-size: 0.8rem; color: var(--neutral-foreground-hint); margin-bottom: 0.5rem;">
-            Showing @Messages.Count dead-letter message(s)
+            @if (filtered.Count < Messages.Count)
+            {
+                <span>Showing @filtered.Count of @Messages.Count dead-letter message(s)</span>
+            }
+            else
+            {
+                <span>Showing @Messages.Count dead-letter message(s)</span>
+            }
         </div>
         <FluentStack Orientation="Orientation.Vertical" Style="gap: 0.5rem;">
-            @foreach (var (msg, idx) in Messages.Select((m, i) => (m, i)))
+            @foreach (var (msg, idx) in filtered.Select((m, i) => (m, i)))
             {
                 var isExpanded = _expanded.Contains(msg.SequenceNumber);
                 var isResubmitting = _resubmitting.Contains(msg.SequenceNumber);
