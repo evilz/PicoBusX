@@ -26,6 +26,15 @@
                           Disabled="@IsBusy">
                 @if (IsBusy) { <span>Loading…</span> } else { <span>Receive</span> }
             </FluentButton>
+            @if (HasMore && Messages.Any() && !IsBusy)
+            {
+                <FluentButton Appearance="Appearance.Outline"
+                              IconStart="@(new Icons.Regular.Size16.ArrowDown())"
+                              OnClick="DoLoadMore"
+                              Disabled="@IsBusy">
+                    Load More
+                </FluentButton>
+            }
         </FluentStack>
     </FluentCard>
 
@@ -44,7 +53,7 @@
             }
             else
             {
-                <span>Showing @Messages.Count message(s)</span>
+                <span>Showing @Messages.Count message(s)@(HasMore ? " — more available" : "")</span>
             }
         </div>
         <FluentStack Orientation="Orientation.Vertical" Style="gap: 0.5rem;">
@@ -102,6 +111,16 @@
                 </FluentCard>
             }
         </FluentStack>
+        @if (HasMore && !IsBusy)
+        {
+            <div style="text-align: center; margin-top: 1rem;">
+                <FluentButton Appearance="Appearance.Outline"
+                              IconStart="@(new Icons.Regular.Size16.ArrowDown())"
+                              OnClick="DoLoadMore">
+                    Load More
+                </FluentButton>
+            </div>
+        }
     }
     else if (!IsBusy && string.IsNullOrEmpty(ErrorMessage))
     {
@@ -113,12 +132,18 @@
 
 @code {
     [Parameter] public string EntityPath { get; set; } = string.Empty;
-    [Parameter] public EventCallback<(string, int)> OnPeek { get; set; }
+    [Parameter] public EventCallback<(string entityPath, int maxCount, long? fromSequenceNumber)> OnPeek { get; set; }
     [Parameter] public EventCallback<(string, int)> OnReceive { get; set; }
     [Parameter] public List<BrowsedMessage> Messages { get; set; } = new();
     [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public bool HasMore { get; set; }
     [Parameter] public string? ErrorMessage { get; set; }
 
-    private async Task DoPeek() => await OnPeek.InvokeAsync((EntityPath, _maxCount));
+    private async Task DoPeek() => await OnPeek.InvokeAsync((EntityPath, _maxCount, null));
     private async Task DoReceive() => await OnReceive.InvokeAsync((EntityPath, _maxCount));
+    private async Task DoLoadMore()
+    {
+        var fromSeq = Messages.Count > 0 ? Messages.Max(m => m.SequenceNumber) + 1 : (long?)null;
+        await OnPeek.InvokeAsync((EntityPath, _maxCount, fromSeq));
+    }
 }

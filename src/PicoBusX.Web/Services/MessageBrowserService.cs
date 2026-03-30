@@ -17,11 +17,11 @@ public class MessageBrowserService
         _logger = logger;
     }
 
-    public async Task<List<BrowsedMessage>> PeekMessagesAsync(string entityPath, int maxCount, CancellationToken ct = default)
+    public async Task<List<BrowsedMessage>> PeekMessagesAsync(string entityPath, int maxCount, long? fromSequenceNumber = null, CancellationToken ct = default)
     {
         var client = _factory.GetClient();
         await using var receiver = client.CreateReceiver(entityPath);
-        var peeked = await receiver.PeekMessagesAsync(maxCount, cancellationToken: ct);
+        var peeked = await receiver.PeekMessagesAsync(maxCount, fromSequenceNumber, cancellationToken: ct);
         return peeked.Select(m => MapMessage(m, _logger)).ToList();
     }
 
@@ -123,7 +123,7 @@ public class MessageBrowserService
         return results;
     }
 
-    public async Task<List<BrowsedMessage>> PeekDeadLetterAsync(string entityPath, int maxCount, CancellationToken ct = default)
+    public async Task<List<BrowsedMessage>> PeekDeadLetterAsync(string entityPath, int maxCount, long? fromSequenceNumber = null, CancellationToken ct = default)
     {
         var client = _factory.GetClient();
         await using var receiver = client.CreateReceiver(entityPath, new ServiceBusReceiverOptions
@@ -131,7 +131,7 @@ public class MessageBrowserService
             SubQueue = SubQueue.DeadLetter,
             ReceiveMode = ServiceBusReceiveMode.PeekLock
         });
-        var peeked = await receiver.PeekMessagesAsync(maxCount, cancellationToken: ct);
+        var peeked = await receiver.PeekMessagesAsync(maxCount, fromSequenceNumber, cancellationToken: ct);
         return peeked.Select(m => MapMessage(m, _logger)).ToList();
     }
 
