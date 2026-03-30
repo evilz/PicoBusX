@@ -116,6 +116,7 @@
                             OnReceive="HandleReceiveAsync"
                             Messages="@_browsedMessages"
                             IsBusy="@_browsing"
+                            HasMore="@_hasMoreMessages"
                             ErrorMessage="@_browseError" />
                     </FluentTab>
                     <FluentTab Id="dlq" Label="Dead Letter" Icon="@(new Icons.Regular.Size16.Warning())">
@@ -126,6 +127,7 @@
                             OnResubmit="HandleDlqResubmitAsync"
                             Messages="@_dlqMessages"
                             IsBusy="@_dlqBusy"
+                            HasMore="@_hasMoreDlqMessages"
                             ErrorMessage="@_dlqError" />
                     </FluentTab>
                 }
@@ -285,10 +287,12 @@
 
     private List<BrowsedMessage> _browsedMessages = new();
     private bool _browsing;
+    private bool _hasMoreMessages;
     private string? _browseError;
 
     private List<BrowsedMessage> _dlqMessages = new();
     private bool _dlqBusy;
+    private bool _hasMoreDlqMessages;
     private string? _dlqError;
 
     // Create entity dialog state
@@ -374,10 +378,12 @@
     {
         _activeTab = "details";
         _browsedMessages = new();
+        _hasMoreMessages = false;
         _sendResult = null;
         _sendError = null;
         _browseError = null;
         _dlqMessages = new();
+        _hasMoreDlqMessages = false;
         _dlqError = null;
     }
 
@@ -421,18 +427,33 @@
         _ => false
     };
 
-    private async Task HandlePeekAsync((string entityPath, int maxCount) args)
+    private async Task HandlePeekAsync((string entityPath, int maxCount, long? fromSequenceNumber) args)
     {
         _browsing = true;
         _browseError = null;
-        _browsedMessages = new();
+        if (!args.fromSequenceNumber.HasValue)
+        {
+            _browsedMessages = new();
+            _hasMoreMessages = false;
+        }
         StateHasChanged();
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            _browsedMessages = IsSessionEnabled()
-                ? await MessageBrowserService.PeekSessionMessagesAsync(Factory.GetClient(), args.entityPath, args.maxCount, cts.Token)
-                : await Browser.PeekMessagesAsync(args.entityPath, args.maxCount, cts.Token);
+            List<BrowsedMessage> batch;
+            if (IsSessionEnabled())
+            {
+                batch = await MessageBrowserService.PeekSessionMessagesAsync(Factory.GetClient(), args.entityPath, args.maxCount, cts.Token);
+            }
+            else
+            {
+                batch = await Browser.PeekMessagesAsync(args.entityPath, args.maxCount, args.fromSequenceNumber, cts.Token);
+            }
+            if (args.fromSequenceNumber.HasValue)
+                _browsedMessages = _browsedMessages.Concat(batch).ToList();
+            else
+                _browsedMessages = batch;
+            _hasMoreMessages = !IsSessionEnabled() && batch.Count >= args.maxCount;
         }
         catch (Exception ex)
         {
@@ -469,16 +490,25 @@
         }
     }
 
-    private async Task HandleDlqPeekAsync((string entityPath, int maxCount) args)
+    private async Task HandleDlqPeekAsync((string entityPath, int maxCount, long? fromSequenceNumber) args)
     {
         _dlqBusy = true;
         _dlqError = null;
-        _dlqMessages = new();
+        if (!args.fromSequenceNumber.HasValue)
+        {
+            _dlqMessages = new();
+            _hasMoreDlqMessages = false;
+        }
         StateHasChanged();
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            _dlqMessages = await Browser.PeekDeadLetterAsync(args.entityPath, args.maxCount, cts.Token);
+            var batch = await Browser.PeekDeadLetterAsync(args.entityPath, args.maxCount, args.fromSequenceNumber, cts.Token);
+            if (args.fromSequenceNumber.HasValue)
+                _dlqMessages = _dlqMessages.Concat(batch).ToList();
+            else
+                _dlqMessages = batch;
+            _hasMoreDlqMessages = batch.Count >= args.maxCount;
         }
         catch (Exception ex)
         {
