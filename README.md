@@ -24,6 +24,9 @@ Built with **Aspire 13.1.2** for local development orchestration and **Microsoft
 - 📋 **Entity Details** — active message count, dead-letter count, lock duration, session info, timestamps
 - 📤 **Send Message** — JSON editor with Format / Minify / Validate, optional headers, application properties
 - 👁️ **Peek / Read Messages** — non-destructive peek or PeekLock receive, with expandable message cards (body pretty-printed if JSON)
+- 🗑️ **Dead-Letter Browser** — dedicated DLQ panel per entity; peek and resubmit dead-lettered messages
+- 🔍 **Message Filtering** — client-side filter applied after fetch; matches MessageId, Subject, CorrelationId, SessionId, body, and application properties
+- ⏬ **Load More** — sequence-number-based continuation for browsing beyond the initial batch
 - ✅ **Connection Status** — banner showing connected/not-connected with error details
 
 ---
@@ -152,7 +155,9 @@ src/
     │   ├── BusTreeView.razor          # Collapsible tree with search
     │   ├── EntityDetailsPanel.razor   # Queue/Topic/Subscription property tables
     │   ├── JsonMessageEditor.razor    # JSON textarea editor (format/minify/validate)
-    │   └── PeekReadPanel.razor        # Peek / Receive message browser
+    │   ├── MessagePanelBase.cs        # Shared base class for message panels
+    │   ├── PeekReadPanel.razor        # Peek / Receive message browser
+    │   └── DlqPanel.razor             # Dead-letter message browser
     ├── Models/                        # QueueInfo, TopicInfo, BrowsedMessage, etc.
     ├── Options/
     │   └── ServiceBusConnectionOptions.cs
@@ -170,10 +175,8 @@ src/
 ## Known Limits
 
 - **Azure Service Bus Emulator** — ✅ Supported when running under Aspire
-- **No Azure AD / Managed Identity** support yet — only connection-string auth (SAS)
 - **Peek is non-destructive** — uses `PeekMessages`; Receive uses PeekLock and abandons immediately
-- **No dead-letter browser** — to peek DLQ, set entity path to `<queue>/$DeadLetterQueue`
-- **No message filtering** — peek returns next N messages from the head of the queue/subscription
+- **Load More unavailable for session entities** — sequence-number continuation is suppressed for session-enabled queues and subscriptions (session receivers use per-session sequence spaces)
 - **No reconnect / retry UI** — restart the app if the connection string changes
 - **Sessions** — session-enabled queues/subscriptions are browsed via session receivers; multiple sessions are sampled up to the requested message count
 
