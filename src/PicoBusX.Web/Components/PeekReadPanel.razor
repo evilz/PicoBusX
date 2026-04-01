@@ -1,19 +1,15 @@
-@using PicoBusX.Web.Models
 @inherits MessagePanelBase
 
 <div class="peek-panel">
-    <FluentCard Style="margin-bottom: 1rem;">
-        <FluentStack Orientation="Orientation.Horizontal" Style="align-items: flex-end; gap: 1rem; flex-wrap: wrap;">
-            <FluentNumberField Label="Max Messages"
-                               @bind-Value="_maxCount"
-                               Min="1"
-                               Max="500"
-                               Style="width: 120px;" />
-            <FluentTextField Label="Filter"
-                             @bind-Value="_filterText"
-                             Placeholder="MessageId, Subject, Body…"
-                             Style="flex: 1; min-width: 160px;"
-                             Disabled="@IsBusy" />
+    <MessagePanelToolbar MaxCount="@_maxCount"
+                         MaxCountChanged="@((v) => _maxCount = v)"
+                         FilterText="@_filterText"
+                         FilterTextChanged="@((v) => _filterText = v)"
+                         IsBusy="@IsBusy"
+                         HasMore="@HasMore"
+                         HasMessages="@Messages.Any()"
+                         OnLoadMore="DoLoadMore">
+        <ActionButtons>
             <FluentButton Appearance="Appearance.Accent"
                           IconStart="@(new Icons.Regular.Size16.Eye())"
                           OnClick="DoPeek"
@@ -26,17 +22,8 @@
                           Disabled="@IsBusy">
                 @if (IsBusy) { <span>Loading…</span> } else { <span>Receive</span> }
             </FluentButton>
-            @if (HasMore && Messages.Any() && !IsBusy)
-            {
-                <FluentButton Appearance="Appearance.Outline"
-                              IconStart="@(new Icons.Regular.Size16.ArrowDown())"
-                              OnClick="DoLoadMore"
-                              Disabled="@IsBusy">
-                    Load More
-                </FluentButton>
-            }
-        </FluentStack>
-    </FluentCard>
+        </ActionButtons>
+    </MessagePanelToolbar>
 
     @if (!string.IsNullOrEmpty(ErrorMessage))
     {
@@ -83,20 +70,7 @@
                                 <span><strong>Enqueued:</strong> @msg.EnqueuedTime.ToString("yyyy-MM-dd HH:mm:ss zzz")</span>
                             </FluentStack>
 
-                            @if (msg.ApplicationProperties.Any())
-                            {
-                                <div style="margin-bottom: 0.75rem; font-size: 0.85rem;">
-                                    <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">Application Properties</FluentLabel>
-                                    <table class="details-table">
-                                        <tbody>
-                                            @foreach (var kv in msg.ApplicationProperties)
-                                            {
-                                                <tr><td>@kv.Key</td><td>@kv.Value</td></tr>
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            }
+                            <MessageApplicationProperties Properties="@msg.ApplicationProperties" />
 
                             <div>
                                 <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">Body</FluentLabel>
@@ -111,16 +85,7 @@
                 </FluentCard>
             }
         </FluentStack>
-        @if (HasMore && !IsBusy)
-        {
-            <div style="text-align: center; margin-top: 1rem;">
-                <FluentButton Appearance="Appearance.Outline"
-                              IconStart="@(new Icons.Regular.Size16.ArrowDown())"
-                              OnClick="DoLoadMore">
-                    Load More
-                </FluentButton>
-            </div>
-        }
+        <LoadMoreButton HasMore="@HasMore" IsBusy="@IsBusy" OnClick="DoLoadMore" />
     }
     else if (!IsBusy && string.IsNullOrEmpty(ErrorMessage))
     {
@@ -131,19 +96,7 @@
 </div>
 
 @code {
-    [Parameter] public string EntityPath { get; set; } = string.Empty;
-    [Parameter] public EventCallback<(string entityPath, int maxCount, long? fromSequenceNumber)> OnPeek { get; set; }
     [Parameter] public EventCallback<(string, int)> OnReceive { get; set; }
-    [Parameter] public List<BrowsedMessage> Messages { get; set; } = new();
-    [Parameter] public bool IsBusy { get; set; }
-    [Parameter] public bool HasMore { get; set; }
-    [Parameter] public string? ErrorMessage { get; set; }
 
-    private async Task DoPeek() => await OnPeek.InvokeAsync((EntityPath, _maxCount, null));
     private async Task DoReceive() => await OnReceive.InvokeAsync((EntityPath, _maxCount));
-    private async Task DoLoadMore()
-    {
-        var fromSeq = Messages.Count > 0 ? Messages.Max(m => m.SequenceNumber) + 1 : (long?)null;
-        await OnPeek.InvokeAsync((EntityPath, _maxCount, fromSeq));
-    }
 }

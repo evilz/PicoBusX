@@ -1,0 +1,16 @@
+@if (HasMore && !IsBusy)
+{
+    <div style="text-align: center; margin-top: 1rem;">
+        <FluentButton Appearance="Appearance.Outline"
+                      IconStart="@(new Icons.Regular.Size16.ArrowDown())"
+                      OnClick="OnClick">
+            Load More
+        </FluentButton>
+    </div>
+}
+
+@code {
+    [Parameter] public bool HasMore { get; set; }
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+}

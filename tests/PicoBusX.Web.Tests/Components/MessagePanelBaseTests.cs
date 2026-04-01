@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.AspNetCore.Components;
 using PicoBusX.Web.Components;
 using PicoBusX.Web.Models;
 
@@ -19,6 +20,8 @@ public class MessagePanelBaseTests
         public IReadOnlyList<BrowsedMessage> CallFilterMessages(List<BrowsedMessage> messages) => FilterMessages(messages);
         public void RunOnInitialized() => OnInitialized();
         public void RunOnParametersSet() => OnParametersSet();
+        public Task CallDoPeek() => DoPeek();
+        public Task CallDoLoadMore() => DoLoadMore();
 
         protected override void BuildRenderTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder) { }
     }
@@ -230,5 +233,69 @@ public class MessagePanelBaseTests
         var result = panel.CallFilterMessages(messages);
 
         result.Should().BeEmpty();
+    }
+
+    // --- DoPeek ---
+
+    [Fact]
+    public async Task DoPeek_InvokesOnPeekWithNullSequence()
+    {
+        (string entityPath, int maxCount, long? fromSequenceNumber) captured = default;
+        var panel = new TestPanel
+        {
+            EntityPath = "my-queue",
+            OnPeek = EventCallback.Factory.Create<(string, int, long?)>(
+                new object(), args => captured = args)
+        };
+        panel.RunOnInitialized();
+
+        await panel.CallDoPeek();
+
+        captured.entityPath.Should().Be("my-queue");
+        captured.maxCount.Should().Be(10);
+        captured.fromSequenceNumber.Should().BeNull();
+    }
+
+    // --- DoLoadMore ---
+
+    [Fact]
+    public async Task DoLoadMore_WithNoMessages_InvokesOnPeekWithNullFromSequence()
+    {
+        (string entityPath, int maxCount, long? fromSequenceNumber) captured = default;
+        var panel = new TestPanel
+        {
+            EntityPath = "my-queue",
+            Messages = new List<BrowsedMessage>(),
+            OnPeek = EventCallback.Factory.Create<(string, int, long?)>(
+                new object(), args => captured = args)
+        };
+        panel.RunOnInitialized();
+
+        await panel.CallDoLoadMore();
+
+        captured.fromSequenceNumber.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DoLoadMore_WithMessages_InvokesOnPeekWithMaxSequencePlusOne()
+    {
+        (string entityPath, int maxCount, long? fromSequenceNumber) captured = default;
+        var panel = new TestPanel
+        {
+            EntityPath = "my-queue",
+            Messages =
+            [
+                new BrowsedMessage { SequenceNumber = 5 },
+                new BrowsedMessage { SequenceNumber = 10 },
+                new BrowsedMessage { SequenceNumber = 3 },
+            ],
+            OnPeek = EventCallback.Factory.Create<(string, int, long?)>(
+                new object(), args => captured = args)
+        };
+        panel.RunOnInitialized();
+
+        await panel.CallDoLoadMore();
+
+        captured.fromSequenceNumber.Should().Be(11);
     }
 }
