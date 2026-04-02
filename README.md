@@ -23,7 +23,8 @@ Built with **Aspire 13.1.2** for local development orchestration and **Microsoft
 - 🌲 **Interactive TreeView** — lists Queues, Topics, and Subscriptions (with filter/search)
 - 📋 **Entity Details** — active message count, dead-letter count, lock duration, session info, timestamps
 - 📤 **Send Message** — JSON editor with Format / Minify / Validate, optional headers, application properties
-- 👁️ **Peek / Read Messages** — non-destructive peek or PeekLock receive, with expandable message cards (body pretty-printed if JSON)
+- 👁️ **Peek / Read Messages** — non-destructive peek or PeekLock receive, with expandable message cards (body pretty-printed if JSON); client-side filter across MessageId, Subject, CorrelationId, SessionId, Body, and ApplicationProperties; load-more pagination
+- ☠️ **Dead Letter Browser** — dedicated tab to peek dead-letter queues; supports the same filter and load-more features plus one-click message resubmission
 - ✅ **Connection Status** — banner showing connected/not-connected with error details
 
 ---
@@ -150,17 +151,21 @@ src/
     │   ├── Layout/
     │   │   └── MainLayout.razor       # Minimal dark-header layout
     │   ├── BusTreeView.razor          # Collapsible tree with search
+    │   ├── DlqPanel.razor             # Dead-letter queue browser with resubmit
     │   ├── EntityDetailsPanel.razor   # Queue/Topic/Subscription property tables
     │   ├── JsonMessageEditor.razor    # JSON textarea editor (format/minify/validate)
+    │   ├── MessagePanelBase.cs        # Shared base for PeekReadPanel and DlqPanel
     │   └── PeekReadPanel.razor        # Peek / Receive message browser
     ├── Models/                        # QueueInfo, TopicInfo, BrowsedMessage, etc.
     ├── Options/
     │   └── ServiceBusConnectionOptions.cs
     ├── Services/
-    │   ├── ServiceBusClientFactory.cs # Singleton client/admin client factory
+    │   ├── ConnectionSettingsStore.cs # Persisted connection-string settings
+    │   ├── EntityManagementService.cs # Create / delete entities
     │   ├── ExplorerService.cs         # List entities + runtime properties
+    │   ├── MessageBrowserService.cs   # Peek / Receive / DLQ messages
     │   ├── MessageSenderService.cs    # Send JSON messages
-    │   └── MessageBrowserService.cs   # Peek / Receive messages
+    │   └── ServiceBusClientFactory.cs # Singleton client/admin client factory
     ├── Program.cs
     └── appsettings.json
 ```
@@ -172,8 +177,6 @@ src/
 - **Azure Service Bus Emulator** — ✅ Supported when running under Aspire
 - **No Azure AD / Managed Identity** support yet — only connection-string auth (SAS)
 - **Peek is non-destructive** — uses `PeekMessages`; Receive uses PeekLock and abandons immediately
-- **No dead-letter browser** — to peek DLQ, set entity path to `<queue>/$DeadLetterQueue`
-- **No message filtering** — peek returns next N messages from the head of the queue/subscription
 - **No reconnect / retry UI** — restart the app if the connection string changes
 - **Sessions** — session-enabled queues/subscriptions are browsed via session receivers; multiple sessions are sampled up to the requested message count
 
