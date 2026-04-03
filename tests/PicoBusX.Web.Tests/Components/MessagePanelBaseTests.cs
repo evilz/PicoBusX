@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.AspNetCore.Components;
 using PicoBusX.Web.Components;
 using PicoBusX.Web.Models;
 
@@ -19,6 +20,8 @@ public class MessagePanelBaseTests
         public IReadOnlyList<BrowsedMessage> CallFilterMessages(List<BrowsedMessage> messages) => FilterMessages(messages);
         public void RunOnInitialized() => OnInitialized();
         public void RunOnParametersSet() => OnParametersSet();
+        public Task CallDoPeek() => DoPeek();
+        public Task CallDoLoadMore() => DoLoadMore();
 
         protected override void BuildRenderTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder) { }
     }
@@ -230,5 +233,57 @@ public class MessagePanelBaseTests
         var result = panel.CallFilterMessages(messages);
 
         result.Should().BeEmpty();
+    }
+
+    // --- DoPeek ---
+
+    [Fact]
+    public async Task DoPeek_InvokesOnPeekWithEntityPathMaxCountAndNullSequenceNumber()
+    {
+        (string entityPath, int maxCount, long? fromSequenceNumber)? captured = null;
+        var panel = new TestPanel { EntityPath = "my/queue" };
+        panel.OnPeek = EventCallback.Factory.Create<(string, int, long?)>(this, args => captured = args);
+        panel.RunOnInitialized();
+
+        await panel.CallDoPeek();
+
+        captured.Should().NotBeNull();
+        captured!.Value.entityPath.Should().Be("my/queue");
+        captured.Value.maxCount.Should().Be(10);
+        captured.Value.fromSequenceNumber.Should().BeNull();
+    }
+
+    // --- DoLoadMore ---
+
+    [Fact]
+    public async Task DoLoadMore_WithNoMessages_InvokesOnPeekWithNullFromSequenceNumber()
+    {
+        (string entityPath, int maxCount, long? fromSequenceNumber)? captured = null;
+        var panel = new TestPanel { EntityPath = "my/queue", Messages = new() };
+        panel.OnPeek = EventCallback.Factory.Create<(string, int, long?)>(this, args => captured = args);
+        panel.RunOnInitialized();
+
+        await panel.CallDoLoadMore();
+
+        captured.Should().NotBeNull();
+        captured!.Value.fromSequenceNumber.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DoLoadMore_WithMessages_InvokesOnPeekWithFromSequenceNumberAfterMaxSeq()
+    {
+        (string entityPath, int maxCount, long? fromSequenceNumber)? captured = null;
+        var panel = new TestPanel
+        {
+            EntityPath = "my/queue",
+            Messages = new() { new() { SequenceNumber = 5 }, new() { SequenceNumber = 10 }, new() { SequenceNumber = 3 } }
+        };
+        panel.OnPeek = EventCallback.Factory.Create<(string, int, long?)>(this, args => captured = args);
+        panel.RunOnInitialized();
+
+        await panel.CallDoLoadMore();
+
+        captured.Should().NotBeNull();
+        captured!.Value.fromSequenceNumber.Should().Be(11); // max(10) + 1
     }
 }
