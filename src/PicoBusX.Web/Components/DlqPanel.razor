@@ -110,8 +110,6 @@
 
     private HashSet<long> _resubmitting = new();
 
-    private async Task DoPeek() => await OnPeek.InvokeAsync((EntityPath, _maxCount, null));
-
     private async Task DoResubmit(long sequenceNumber)
     {
         _resubmitting.Add(sequenceNumber);

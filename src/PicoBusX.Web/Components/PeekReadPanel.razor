@@ -101,6 +101,5 @@
 @code {
     [Parameter] public EventCallback<(string, int)> OnReceive { get; set; }
 
-    private async Task DoPeek() => await OnPeek.InvokeAsync((EntityPath, _maxCount, null));
     private async Task DoReceive() => await OnReceive.InvokeAsync((EntityPath, _maxCount));
 }

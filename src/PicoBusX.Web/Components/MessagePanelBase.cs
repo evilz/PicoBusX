@@ -6,7 +6,7 @@ namespace PicoBusX.Web.Components;
 /// <summary>
 /// Abstract base class for message panel components (<see cref="PeekReadPanel"/> and <see cref="DlqPanel"/>).
 /// Provides shared state management for max message count, expand/collapse tracking,
-/// client-side message filtering, pagination, and utility formatting used by both panels.
+/// client-side message filtering, shared parameters, pagination, and utility formatting used by both panels.
 /// </summary>
 public abstract class MessagePanelBase : ComponentBase
 {
@@ -32,16 +32,18 @@ public abstract class MessagePanelBase : ComponentBase
         if (_maxCount == 0) _maxCount = DefaultMaxCount > 0 ? DefaultMaxCount : 10;
     }
 
+    protected virtual async Task DoPeek() => await OnPeek.InvokeAsync((EntityPath, _maxCount, null));
+
+    protected virtual async Task DoLoadMore()
+    {
+        var fromSeq = Messages.Count > 0 ? Messages.Max(m => m.SequenceNumber) + 1 : (long?)null;
+        await OnPeek.InvokeAsync((EntityPath, _maxCount, fromSeq));
+    }
+
     protected void ToggleMessage(long sequenceNumber)
     {
         if (_expanded.Contains(sequenceNumber)) _expanded.Remove(sequenceNumber);
         else _expanded.Add(sequenceNumber);
-    }
-
-    protected async Task DoLoadMore()
-    {
-        var fromSeq = Messages.Count > 0 ? Messages.Max(m => m.SequenceNumber) + 1 : (long?)null;
-        await OnPeek.InvokeAsync((EntityPath, _maxCount, fromSeq));
     }
 
     /// <summary>
