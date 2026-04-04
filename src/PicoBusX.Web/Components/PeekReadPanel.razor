@@ -82,32 +82,13 @@
                                 @if (!string.IsNullOrEmpty(msg.ContentType)) { <span><strong>ContentType:</strong> @msg.ContentType</span> }
                                 <span><strong>Enqueued:</strong> @msg.EnqueuedTime.ToString("yyyy-MM-dd HH:mm:ss zzz")</span>
                             </FluentStack>
-
-                            <MessageApplicationProperties Properties="@msg.ApplicationProperties" />
-
-                            <div>
-                                <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">Body</FluentLabel>
-                                <div style="border: 1px solid var(--neutral-stroke-rest); border-radius: 4px; overflow: hidden;">
-                                    <StandaloneCodeEditor Id="@($"peek-body-{msg.SequenceNumber}")"
-                                                          ConstructionOptions="@(e => MonacoEditorOptions.ReadOnly(e, PrettyPrint(msg.Body)))"
-                                                          CssClass="monaco-editor-host monaco-editor-readonly" />
-                                </div>
-                            </div>
+                            <MessageCard Message="@msg" EditorIdPrefix="peek-body" />
                         </div>
                     }
                 </FluentCard>
             }
         </FluentStack>
-        @if (HasMore && !IsBusy)
-        {
-            <div style="text-align: center; margin-top: 1rem;">
-                <FluentButton Appearance="Appearance.Outline"
-                              IconStart="@(new Icons.Regular.Size16.ArrowDown())"
-                              OnClick="DoLoadMore">
-                    Load More
-                </FluentButton>
-            </div>
-        }
+        <LoadMoreButton HasMore="@HasMore" IsBusy="@IsBusy" OnClick="DoLoadMore" />
     }
     else if (!IsBusy && string.IsNullOrEmpty(ErrorMessage))
     {

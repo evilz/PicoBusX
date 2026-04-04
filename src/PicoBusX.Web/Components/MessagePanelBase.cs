@@ -6,7 +6,7 @@ namespace PicoBusX.Web.Components;
 /// <summary>
 /// Abstract base class for message panel components (<see cref="PeekReadPanel"/> and <see cref="DlqPanel"/>).
 /// Provides shared state management for max message count, expand/collapse tracking,
-/// client-side message filtering, shared parameters, and utility formatting used by both panels.
+/// client-side message filtering, shared parameters, pagination, and utility formatting used by both panels.
 /// </summary>
 public abstract class MessagePanelBase : ComponentBase
 {
@@ -72,7 +72,7 @@ public abstract class MessagePanelBase : ComponentBase
     private static bool ContainsIgnoreCase(string? value, string term) =>
         !string.IsNullOrEmpty(value) && value.Contains(term, StringComparison.OrdinalIgnoreCase);
 
-    protected static string PrettyPrint(string body)
+    public static string PrettyPrint(string body)
     {
         if (string.IsNullOrWhiteSpace(body)) return "(empty)";
         try

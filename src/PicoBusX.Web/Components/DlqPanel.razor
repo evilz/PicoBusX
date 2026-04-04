@@ -78,40 +78,23 @@
                                 @if (!string.IsNullOrEmpty(msg.CorrelationId)) { <span><strong>CorrelationId:</strong> @msg.CorrelationId</span> }
                                 <span><strong>Enqueued:</strong> @msg.EnqueuedTime.ToString("yyyy-MM-dd HH:mm:ss zzz")</span>
                             </FluentStack>
-
-                            <MessageApplicationProperties Properties="@msg.ApplicationProperties" />
-
-                            <div style="margin-bottom: 0.75rem;">
-                                <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">Body</FluentLabel>
-                                <div style="border: 1px solid var(--neutral-stroke-rest); border-radius: 4px; overflow: hidden;">
-                                    <StandaloneCodeEditor Id="@($"dlq-body-{msg.SequenceNumber}")"
-                                                          ConstructionOptions="@(e => MonacoEditorOptions.ReadOnly(e, PrettyPrint(msg.Body)))"
-                                                          CssClass="monaco-editor-host monaco-editor-readonly" />
-                                </div>
-                            </div>
-
-                            <FluentButton Appearance="Appearance.Accent"
-                                          IconStart="@(new Icons.Regular.Size16.ArrowCircleUp())"
-                                          OnClick="() => DoResubmit(msg.SequenceNumber)"
-                                          Disabled="@isResubmitting"
-                                          Style="background: #f59e0b;">
-                                @if (isResubmitting) { <span>Resubmitting…</span> } else { <span>Resubmit</span> }
-                            </FluentButton>
+                            <MessageCard Message="@msg" EditorIdPrefix="dlq-body">
+                                <AdditionalContent>
+                                    <FluentButton Appearance="Appearance.Accent"
+                                                  IconStart="@(new Icons.Regular.Size16.ArrowCircleUp())"
+                                                  OnClick="() => DoResubmit(msg.SequenceNumber)"
+                                                  Disabled="@isResubmitting"
+                                                  Style="background: #f59e0b;">
+                                        @if (isResubmitting) { <span>Resubmitting…</span> } else { <span>Resubmit</span> }
+                                    </FluentButton>
+                                </AdditionalContent>
+                            </MessageCard>
                         </div>
                     }
                 </FluentCard>
             }
         </FluentStack>
-        @if (HasMore && !IsBusy)
-        {
-            <div style="text-align: center; margin-top: 1rem;">
-                <FluentButton Appearance="Appearance.Outline"
-                              IconStart="@(new Icons.Regular.Size16.ArrowDown())"
-                              OnClick="DoLoadMore">
-                    Load More
-                </FluentButton>
-            </div>
-        }
+        <LoadMoreButton HasMore="@HasMore" IsBusy="@IsBusy" OnClick="DoLoadMore" />
     }
     else if (!IsBusy && string.IsNullOrEmpty(ErrorMessage))
     {
