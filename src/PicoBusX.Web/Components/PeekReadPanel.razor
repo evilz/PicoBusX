@@ -83,20 +83,7 @@
                                 <span><strong>Enqueued:</strong> @msg.EnqueuedTime.ToString("yyyy-MM-dd HH:mm:ss zzz")</span>
                             </FluentStack>
 
-                            @if (msg.ApplicationProperties.Any())
-                            {
-                                <div style="margin-bottom: 0.75rem; font-size: 0.85rem;">
-                                    <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">Application Properties</FluentLabel>
-                                    <table class="details-table">
-                                        <tbody>
-                                            @foreach (var kv in msg.ApplicationProperties)
-                                            {
-                                                <tr><td>@kv.Key</td><td>@kv.Value</td></tr>
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            }
+                            <MessageApplicationProperties Properties="@msg.ApplicationProperties" />
 
                             <div>
                                 <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">Body</FluentLabel>
