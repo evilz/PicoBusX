@@ -1,0 +1,74 @@
+@using PicoBusX.Web.Models
+
+@if (FilteredMessages.Any())
+{
+    <div style="font-size: 0.8rem; color: var(--neutral-foreground-hint); margin-bottom: 0.5rem;">
+        @if (FilteredMessages.Count < TotalCount)
+        {
+            <span>Showing @FilteredMessages.Count of @TotalCount @CountLabel</span>
+        }
+        else
+        {
+            <span>Showing @TotalCount @CountLabel@(HasMore ? " — more available" : "")</span>
+        }
+    </div>
+    <FluentStack Orientation="Orientation.Vertical" Style="gap: 0.5rem;">
+        @foreach (var (msg, idx) in FilteredMessages.Select((m, i) => (m, i)))
+        {
+            var isExpanded = Expanded.Contains(msg.SequenceNumber);
+            var cardStyle = string.IsNullOrEmpty(CardBorderStyle)
+                ? "padding: 0; overflow: hidden;"
+                : $"padding: 0; overflow: hidden; {CardBorderStyle}";
+            <FluentCard @key="msg.SequenceNumber" Style="@cardStyle">
+                <div class="message-header" @onclick="() => OnToggle.InvokeAsync(msg.SequenceNumber)" style="cursor: pointer; padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.75rem; user-select: none;">
+                    <span style="color: var(--neutral-foreground-hint); font-size: 0.75rem; min-width: 24px;">#@(idx + 1)</span>
+                    <span style="font-family: monospace; font-size: 0.8rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@(msg.MessageId ?? "—")</span>
+                    <span style="color: var(--neutral-foreground-hint); font-size: 0.78rem;">@msg.EnqueuedTime.ToString("HH:mm:ss")</span>
+                    @if (BadgeContent != null)
+                    {
+                        @BadgeContent(msg)
+                    }
+                    <FluentIcon Value="@(isExpanded ? (Icon)new Icons.Regular.Size16.ChevronUp() : new Icons.Regular.Size16.ChevronDown())" Style="color: var(--neutral-foreground-hint);" />
+                </div>
+                @if (isExpanded)
+                {
+                    <FluentDivider />
+                    <div style="padding: 1rem;">
+                        @if (MetadataContent != null)
+                        {
+                            @MetadataContent(msg)
+                        }
+                        <MessageCard Message="@msg" EditorIdPrefix="@EditorIdPrefix"
+                                     AdditionalContent="@GetAdditionalContent(msg)" />
+                    </div>
+                }
+            </FluentCard>
+        }
+    </FluentStack>
+    <LoadMoreButton HasMore="@HasMore" IsBusy="@IsBusy" OnClick="OnLoadMore" />
+}
+else if (TotalCount == 0 && !IsBusy && string.IsNullOrEmpty(ErrorMessage))
+{
+    @EmptyContent
+}
+
+@code {
+    [Parameter] public IReadOnlyList<BrowsedMessage> FilteredMessages { get; set; } = Array.Empty<BrowsedMessage>();
+    [Parameter] public int TotalCount { get; set; }
+    [Parameter] public bool HasMore { get; set; }
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public string CountLabel { get; set; } = "message(s)";
+    [Parameter] public string EditorIdPrefix { get; set; } = "body";
+    [Parameter] public HashSet<long> Expanded { get; set; } = new();
+    [Parameter] public EventCallback<long> OnToggle { get; set; }
+    [Parameter] public RenderFragment<BrowsedMessage>? BadgeContent { get; set; }
+    [Parameter] public RenderFragment<BrowsedMessage>? MetadataContent { get; set; }
+    [Parameter] public RenderFragment<BrowsedMessage>? AdditionalCardContent { get; set; }
+    [Parameter] public string? CardBorderStyle { get; set; }
+    [Parameter] public RenderFragment? EmptyContent { get; set; }
+    [Parameter] public EventCallback OnLoadMore { get; set; }
+
+    private RenderFragment? GetAdditionalContent(BrowsedMessage msg) =>
+        AdditionalCardContent?.Invoke(msg);
+}
