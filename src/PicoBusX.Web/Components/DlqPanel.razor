@@ -37,72 +37,49 @@
         <FluentMessageBar Intent="MessageIntent.Error" Style="margin-bottom: 1rem;">@ErrorMessage</FluentMessageBar>
     }
 
-    @if (Messages.Any())
-    {
-        var filtered = FilterMessages(Messages);
-        <div style="font-size: 0.8rem; color: var(--neutral-foreground-hint); margin-bottom: 0.5rem;">
-            @if (filtered.Count < Messages.Count)
+    <MessageList FilteredMessages="@FilterMessages(Messages)"
+                 TotalCount="@Messages.Count"
+                 HasMore="@HasMore"
+                 IsBusy="@IsBusy"
+                 ErrorMessage="@ErrorMessage"
+                 CountLabel="dead-letter message(s)"
+                 EditorIdPrefix="dlq-body"
+                 CardBorderStyle="border-left: 3px solid #f59e0b;"
+                 Expanded="@_expanded"
+                 OnToggle="ToggleMessage"
+                 OnLoadMore="DoLoadMore">
+        <BadgeContent Context="msg">
+            @if (!string.IsNullOrEmpty(msg.DeadLetterReason))
             {
-                <span>Showing @filtered.Count of @Messages.Count dead-letter message(s)</span>
+                <FluentBadge Appearance="Appearance.Neutral" Style="background: #dc2626; color: white; font-size: 0.75rem;">@msg.DeadLetterReason</FluentBadge>
             }
-            else
-            {
-                <span>Showing @Messages.Count dead-letter message(s)@(HasMore ? " — more available" : "")</span>
-            }
-        </div>
-        <FluentStack Orientation="Orientation.Vertical" Style="gap: 0.5rem;">
-            @foreach (var (msg, idx) in filtered.Select((m, i) => (m, i)))
-            {
-                var isExpanded = _expanded.Contains(msg.SequenceNumber);
-                var isResubmitting = _resubmitting.Contains(msg.SequenceNumber);
-                <FluentCard @key="msg.SequenceNumber" Style="padding: 0; overflow: hidden; border-left: 3px solid #f59e0b;">
-                    <div class="message-header" @onclick="() => ToggleMessage(msg.SequenceNumber)" style="cursor: pointer; padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.75rem; user-select: none;">
-                        <span style="color: var(--neutral-foreground-hint); font-size: 0.75rem; min-width: 24px;">#@(idx + 1)</span>
-                        <span style="font-family: monospace; font-size: 0.8rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@(msg.MessageId ?? "—")</span>
-                        <span style="color: var(--neutral-foreground-hint); font-size: 0.78rem;">@msg.EnqueuedTime.ToString("HH:mm:ss")</span>
-                        @if (!string.IsNullOrEmpty(msg.DeadLetterReason))
-                        {
-                            <FluentBadge Appearance="Appearance.Neutral" Style="background: #dc2626; color: white; font-size: 0.75rem;">@msg.DeadLetterReason</FluentBadge>
-                        }
-                        <FluentIcon Value="@(isExpanded ? (Icon)new Icons.Regular.Size16.ChevronUp() : new Icons.Regular.Size16.ChevronDown())" Style="color: var(--neutral-foreground-hint);" />
-                    </div>
-                    @if (isExpanded)
-                    {
-                        <FluentDivider />
-                        <div style="padding: 1rem;">
-                            <FluentStack Orientation="Orientation.Horizontal" Style="flex-wrap: wrap; gap: 0.75rem; font-size: 0.8rem; margin-bottom: 0.75rem; background: var(--neutral-fill-rest); padding: 0.5rem; border-radius: 4px;">
-                                <span><strong>Seq#:</strong> @msg.SequenceNumber</span>
-                                @if (!string.IsNullOrEmpty(msg.DeadLetterReason)) { <span><strong>DL Reason:</strong> @msg.DeadLetterReason</span> }
-                                @if (!string.IsNullOrEmpty(msg.DeadLetterErrorDescription)) { <span><strong>DL Error:</strong> @msg.DeadLetterErrorDescription</span> }
-                                @if (!string.IsNullOrEmpty(msg.SessionId)) { <span><strong>SessionId:</strong> @msg.SessionId</span> }
-                                @if (!string.IsNullOrEmpty(msg.CorrelationId)) { <span><strong>CorrelationId:</strong> @msg.CorrelationId</span> }
-                                <span><strong>Enqueued:</strong> @msg.EnqueuedTime.ToString("yyyy-MM-dd HH:mm:ss zzz")</span>
-                            </FluentStack>
-                            <MessageCard Message="@msg" EditorIdPrefix="dlq-body">
-                                <AdditionalContent>
-                                    <FluentButton Appearance="Appearance.Accent"
-                                                  IconStart="@(new Icons.Regular.Size16.ArrowCircleUp())"
-                                                  OnClick="() => DoResubmit(msg.SequenceNumber)"
-                                                  Disabled="@isResubmitting"
-                                                  Style="background: #f59e0b;">
-                                        @if (isResubmitting) { <span>Resubmitting…</span> } else { <span>Resubmit</span> }
-                                    </FluentButton>
-                                </AdditionalContent>
-                            </MessageCard>
-                        </div>
-                    }
-                </FluentCard>
-            }
-        </FluentStack>
-        <LoadMoreButton HasMore="@HasMore" IsBusy="@IsBusy" OnClick="DoLoadMore" />
-    }
-    else if (!IsBusy && string.IsNullOrEmpty(ErrorMessage))
-    {
-        <FluentCard Style="text-align: center; padding: 2rem; color: var(--neutral-foreground-hint);">
-            <div aria-hidden="true">☠️</div>
-            <div>No dead-letter messages. Use Peek DLQ to check.</div>
-        </FluentCard>
-    }
+        </BadgeContent>
+        <MetadataContent Context="msg">
+            <FluentStack Orientation="Orientation.Horizontal" Style="flex-wrap: wrap; gap: 0.75rem; font-size: 0.8rem; margin-bottom: 0.75rem; background: var(--neutral-fill-rest); padding: 0.5rem; border-radius: 4px;">
+                <span><strong>Seq#:</strong> @msg.SequenceNumber</span>
+                @if (!string.IsNullOrEmpty(msg.DeadLetterReason)) { <span><strong>DL Reason:</strong> @msg.DeadLetterReason</span> }
+                @if (!string.IsNullOrEmpty(msg.DeadLetterErrorDescription)) { <span><strong>DL Error:</strong> @msg.DeadLetterErrorDescription</span> }
+                @if (!string.IsNullOrEmpty(msg.SessionId)) { <span><strong>SessionId:</strong> @msg.SessionId</span> }
+                @if (!string.IsNullOrEmpty(msg.CorrelationId)) { <span><strong>CorrelationId:</strong> @msg.CorrelationId</span> }
+                <span><strong>Enqueued:</strong> @msg.EnqueuedTime.ToString("yyyy-MM-dd HH:mm:ss zzz")</span>
+            </FluentStack>
+        </MetadataContent>
+        <AdditionalCardContent Context="msg">
+            <FluentButton Appearance="Appearance.Accent"
+                          IconStart="@(new Icons.Regular.Size16.ArrowCircleUp())"
+                          OnClick="() => DoResubmit(msg.SequenceNumber)"
+                          Disabled="@_resubmitting.Contains(msg.SequenceNumber)"
+                          Style="background: #f59e0b;">
+                @if (_resubmitting.Contains(msg.SequenceNumber)) { <span>Resubmitting…</span> } else { <span>Resubmit</span> }
+            </FluentButton>
+        </AdditionalCardContent>
+        <EmptyContent>
+            <FluentCard Style="text-align: center; padding: 2rem; color: var(--neutral-foreground-hint);">
+                <div aria-hidden="true">☠️</div>
+                <div>No dead-letter messages. Use Peek DLQ to check.</div>
+            </FluentCard>
+        </EmptyContent>
+    </MessageList>
 </div>
 
 @code {
