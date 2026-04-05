@@ -27,11 +27,6 @@ public abstract class MessagePanelBase : ComponentBase
         _maxCount = DefaultMaxCount > 0 ? DefaultMaxCount : 10;
     }
 
-    protected override void OnParametersSet()
-    {
-        if (_maxCount == 0) _maxCount = DefaultMaxCount > 0 ? DefaultMaxCount : 10;
-    }
-
     protected virtual async Task DoPeek() => await OnPeek.InvokeAsync((EntityPath, _maxCount, null));
 
     protected virtual async Task DoLoadMore()
