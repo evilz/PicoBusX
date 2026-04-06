@@ -43,91 +43,37 @@
         <FluentMessageBar Intent="MessageIntent.Error" Style="margin-bottom: 1rem;">@ErrorMessage</FluentMessageBar>
     }
 
-    @if (Messages.Any())
-    {
-        var filtered = FilterMessages(Messages);
-        <div style="font-size: 0.8rem; color: var(--neutral-foreground-hint); margin-bottom: 0.5rem;">
-            @if (filtered.Count < Messages.Count)
+    <MessageList FilteredMessages="@FilterMessages(Messages)"
+                 TotalCount="@Messages.Count"
+                 HasMore="@HasMore"
+                 IsBusy="@IsBusy"
+                 ErrorMessage="@ErrorMessage"
+                 CountLabel="message(s)"
+                 EditorIdPrefix="peek-body"
+                 Expanded="@_expanded"
+                 OnToggle="ToggleMessage"
+                 OnLoadMore="DoLoadMore">
+        <BadgeContent Context="msg">
+            @if (!string.IsNullOrEmpty(msg.Subject))
             {
-                <span>Showing @filtered.Count of @Messages.Count message(s)</span>
+                <FluentBadge Appearance="Appearance.Neutral" Style="font-size: 0.75rem;">@msg.Subject</FluentBadge>
             }
-            else
-            {
-                <span>Showing @Messages.Count message(s)@(HasMore ? " — more available" : "")</span>
-            }
-        </div>
-        <FluentStack Orientation="Orientation.Vertical" Style="gap: 0.5rem;">
-            @foreach (var (msg, idx) in filtered.Select((m, i) => (m, i)))
-            {
-                var isExpanded = _expanded.Contains(msg.SequenceNumber);
-                <FluentCard @key="msg.SequenceNumber" Style="padding: 0; overflow: hidden;">
-                    <div class="message-header" @onclick="() => ToggleMessage(msg.SequenceNumber)" style="cursor: pointer; padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.75rem; user-select: none;">
-                        <span style="color: var(--neutral-foreground-hint); font-size: 0.75rem; min-width: 24px;">#@(idx + 1)</span>
-                        <span style="font-family: monospace; font-size: 0.8rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@(msg.MessageId ?? "—")</span>
-                        <span style="color: var(--neutral-foreground-hint); font-size: 0.78rem;">@msg.EnqueuedTime.ToString("HH:mm:ss")</span>
-                        @if (!string.IsNullOrEmpty(msg.Subject))
-                        {
-                            <FluentBadge Appearance="Appearance.Neutral" Style="font-size: 0.75rem;">@msg.Subject</FluentBadge>
-                        }
-                        <FluentBadge Appearance="Appearance.Neutral" Style="background: #f59e0b; color: white; font-size: 0.75rem;">DC:@msg.DeliveryCount</FluentBadge>
-                        <FluentIcon Value="@(isExpanded ? (Icon)new Icons.Regular.Size16.ChevronUp() : new Icons.Regular.Size16.ChevronDown())" Style="color: var(--neutral-foreground-hint);" />
-                    </div>
-                    @if (isExpanded)
-                    {
-                        <FluentDivider />
-                        <div style="padding: 1rem;">
-                            <FluentStack Orientation="Orientation.Horizontal" Style="flex-wrap: wrap; gap: 0.75rem; font-size: 0.8rem; margin-bottom: 0.75rem; background: var(--neutral-fill-rest); padding: 0.5rem; border-radius: 4px;">
-                                @if (!string.IsNullOrEmpty(msg.SessionId)) { <span><strong>SessionId:</strong> @msg.SessionId</span> }
-                                @if (!string.IsNullOrEmpty(msg.CorrelationId)) { <span><strong>CorrelationId:</strong> @msg.CorrelationId</span> }
-                                @if (!string.IsNullOrEmpty(msg.ContentType)) { <span><strong>ContentType:</strong> @msg.ContentType</span> }
-                                <span><strong>Enqueued:</strong> @msg.EnqueuedTime.ToString("yyyy-MM-dd HH:mm:ss zzz")</span>
-                            </FluentStack>
-
-                            @if (msg.ApplicationProperties.Any())
-                            {
-                                <div style="margin-bottom: 0.75rem; font-size: 0.85rem;">
-                                    <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">Application Properties</FluentLabel>
-                                    <table class="details-table">
-                                        <tbody>
-                                            @foreach (var kv in msg.ApplicationProperties)
-                                            {
-                                                <tr><td>@kv.Key</td><td>@kv.Value</td></tr>
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            }
-
-                            <div>
-                                <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">Body</FluentLabel>
-                                <div style="border: 1px solid var(--neutral-stroke-rest); border-radius: 4px; overflow: hidden;">
-                                    <StandaloneCodeEditor Id="@($"peek-body-{msg.SequenceNumber}")"
-                                                          ConstructionOptions="@(e => MonacoEditorOptions.ReadOnly(e, PrettyPrint(msg.Body)))"
-                                                          CssClass="monaco-editor-host monaco-editor-readonly" />
-                                </div>
-                            </div>
-                        </div>
-                    }
-                </FluentCard>
-            }
-        </FluentStack>
-        @if (HasMore && !IsBusy)
-        {
-            <div style="text-align: center; margin-top: 1rem;">
-                <FluentButton Appearance="Appearance.Outline"
-                              IconStart="@(new Icons.Regular.Size16.ArrowDown())"
-                              OnClick="DoLoadMore">
-                    Load More
-                </FluentButton>
-            </div>
-        }
-    }
-    else if (!IsBusy && string.IsNullOrEmpty(ErrorMessage))
-    {
-        <FluentCard Style="text-align: center; padding: 2rem; color: var(--neutral-foreground-hint);">
-            Use Peek to preview messages (non-destructive) or Receive to consume them.
-        </FluentCard>
-    }
+            <FluentBadge Appearance="Appearance.Neutral" Style="background: #f59e0b; color: white; font-size: 0.75rem;">DC:@msg.DeliveryCount</FluentBadge>
+        </BadgeContent>
+        <MetadataContent Context="msg">
+            <FluentStack Orientation="Orientation.Horizontal" Style="flex-wrap: wrap; gap: 0.75rem; font-size: 0.8rem; margin-bottom: 0.75rem; background: var(--neutral-fill-rest); padding: 0.5rem; border-radius: 4px;">
+                @if (!string.IsNullOrEmpty(msg.SessionId)) { <span><strong>SessionId:</strong> @msg.SessionId</span> }
+                @if (!string.IsNullOrEmpty(msg.CorrelationId)) { <span><strong>CorrelationId:</strong> @msg.CorrelationId</span> }
+                @if (!string.IsNullOrEmpty(msg.ContentType)) { <span><strong>ContentType:</strong> @msg.ContentType</span> }
+                <span><strong>Enqueued:</strong> @msg.EnqueuedTime.ToString("yyyy-MM-dd HH:mm:ss zzz")</span>
+            </FluentStack>
+        </MetadataContent>
+        <EmptyContent>
+            <FluentCard Style="text-align: center; padding: 2rem; color: var(--neutral-foreground-hint);">
+                Use Peek to preview messages (non-destructive) or Receive to consume them.
+            </FluentCard>
+        </EmptyContent>
+    </MessageList>
 </div>
 
 @code {

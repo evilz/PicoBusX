@@ -1,0 +1,18 @@
+<MessageApplicationProperties Properties="@Message.ApplicationProperties" />
+
+<div style="@(AdditionalContent != null ? "margin-bottom: 0.75rem;" : "")">
+    <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">Body</FluentLabel>
+    <div style="border: 1px solid var(--neutral-stroke-rest); border-radius: 4px; overflow: hidden;">
+        <StandaloneCodeEditor Id="@($"{EditorIdPrefix}-{Message.SequenceNumber}")"
+                              ConstructionOptions="@(e => MonacoEditorOptions.ReadOnly(e, MessagePanelBase.PrettyPrint(Message.Body)))"
+                              CssClass="monaco-editor-host monaco-editor-readonly" />
+    </div>
+</div>
+
+@AdditionalContent
+
+@code {
+    [Parameter, EditorRequired] public BrowsedMessage Message { get; set; } = default!;
+    [Parameter] public string EditorIdPrefix { get; set; } = "body";
+    [Parameter] public RenderFragment? AdditionalContent { get; set; }
+}

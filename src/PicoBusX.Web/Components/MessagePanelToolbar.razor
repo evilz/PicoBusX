@@ -1,0 +1,38 @@
+<FluentCard Style="margin-bottom: 1rem;">
+    <FluentStack Orientation="Orientation.Horizontal" Style="align-items: flex-end; gap: 1rem; flex-wrap: wrap;">
+        <FluentNumberField Label="Max Messages"
+                           Value="@MaxCount"
+                           ValueChanged="@((int v) => MaxCountChanged.InvokeAsync(v))"
+                           Min="1"
+                           Max="500"
+                           Style="width: 120px;" />
+        <FluentTextField Label="Filter"
+                         Value="@FilterText"
+                         ValueChanged="@((string? v) => FilterTextChanged.InvokeAsync(v ?? string.Empty))"
+                         Placeholder="MessageId, Subject, Body…"
+                         Style="flex: 1; min-width: 160px;"
+                         Disabled="@IsBusy" />
+        @ActionButtons
+        @if (HasMore && HasMessages && !IsBusy)
+        {
+            <FluentButton Appearance="Appearance.Outline"
+                          IconStart="@(new Icons.Regular.Size16.ArrowDown())"
+                          OnClick="OnLoadMore"
+                          Disabled="@IsBusy">
+                Load More
+            </FluentButton>
+        }
+    </FluentStack>
+</FluentCard>
+
+@code {
+    [Parameter] public int MaxCount { get; set; }
+    [Parameter] public EventCallback<int> MaxCountChanged { get; set; }
+    [Parameter] public string FilterText { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> FilterTextChanged { get; set; }
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public bool HasMore { get; set; }
+    [Parameter] public bool HasMessages { get; set; }
+    [Parameter] public EventCallback OnLoadMore { get; set; }
+    [Parameter] public RenderFragment? ActionButtons { get; set; }
+}
