@@ -114,37 +114,36 @@ public class ExplorerService(
         return result;
     }
 
-    private async Task<QueueRuntimeProperties?> TryGetQueueRuntimePropertiesAsync(
-        ServiceBusAdministrationClient admin,
-        string queueName,
-        CancellationToken ct)
+    private async Task<T?> TryGetRuntimePropertiesAsync<T>(
+        Func<Task<T>> fetch,
+        Action<Exception> onFailure) where T : class
     {
         try
         {
-            return await admin.GetQueueRuntimePropertiesAsync(queueName, ct);
+            return await fetch();
         }
         catch (Exception ex) when (!TryBuildUserFacingError(ex, out _))
         {
-            logger.LogWarning(ex, "Failed to get runtime properties for queue {QueueName}", queueName);
+            onFailure(ex);
             return null;
         }
     }
 
-    private async Task<TopicRuntimeProperties?> TryGetTopicRuntimePropertiesAsync(
+    private Task<QueueRuntimeProperties?> TryGetQueueRuntimePropertiesAsync(
+        ServiceBusAdministrationClient admin,
+        string queueName,
+        CancellationToken ct) =>
+        TryGetRuntimePropertiesAsync<QueueRuntimeProperties>(
+            async () => await admin.GetQueueRuntimePropertiesAsync(queueName, ct),
+            ex => logger.LogWarning(ex, "Failed to get runtime properties for queue {QueueName}", queueName));
+
+    private Task<TopicRuntimeProperties?> TryGetTopicRuntimePropertiesAsync(
         ServiceBusAdministrationClient admin,
         string topicName,
-        CancellationToken ct)
-    {
-        try
-        {
-            return await admin.GetTopicRuntimePropertiesAsync(topicName, ct);
-        }
-        catch (Exception ex) when (!TryBuildUserFacingError(ex, out _))
-        {
-            logger.LogWarning(ex, "Failed to get runtime properties for topic {TopicName}", topicName);
-            return null;
-        }
-    }
+        CancellationToken ct) =>
+        TryGetRuntimePropertiesAsync<TopicRuntimeProperties>(
+            async () => await admin.GetTopicRuntimePropertiesAsync(topicName, ct),
+            ex => logger.LogWarning(ex, "Failed to get runtime properties for topic {TopicName}", topicName));
 
     private async Task<List<SubscriptionInfo>> GetSubscriptionsForTopicAsync(
         ServiceBusAdministrationClient admin,
@@ -192,27 +191,18 @@ public class ExplorerService(
         return subscriptions;
     }
 
-    private async Task<SubscriptionRuntimeProperties?> TryGetSubscriptionRuntimePropertiesAsync(
+    private Task<SubscriptionRuntimeProperties?> TryGetSubscriptionRuntimePropertiesAsync(
         ServiceBusAdministrationClient admin,
         string topicName,
         string subscriptionName,
-        CancellationToken ct)
-    {
-        try
-        {
-            return await admin.GetSubscriptionRuntimePropertiesAsync(topicName, subscriptionName, ct);
-        }
-        catch (Exception ex) when (!TryBuildUserFacingError(ex, out _))
-        {
-            logger.LogWarning(
+        CancellationToken ct) =>
+        TryGetRuntimePropertiesAsync<SubscriptionRuntimeProperties>(
+            async () => await admin.GetSubscriptionRuntimePropertiesAsync(topicName, subscriptionName, ct),
+            ex => logger.LogWarning(
                 ex,
                 "Failed to get runtime properties for subscription {SubscriptionName} on topic {TopicName}",
                 subscriptionName,
-                topicName);
-
-            return null;
-        }
-    }
+                topicName));
 
     private static DateTimeOffset? NormalizeTimestamp(DateTimeOffset? value)
     {
