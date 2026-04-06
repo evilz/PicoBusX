@@ -238,64 +238,52 @@ public class MessagePanelBaseTests
     // --- DoPeek ---
 
     [Fact]
-    public async Task DoPeek_InvokesOnPeekWithNullSequence()
+    public async Task DoPeek_InvokesOnPeekWithEntityPathMaxCountAndNullSequenceNumber()
     {
-        (string entityPath, int maxCount, long? fromSequenceNumber) captured = default;
-        var panel = new TestPanel
-        {
-            EntityPath = "my-queue",
-            OnPeek = EventCallback.Factory.Create<(string, int, long?)>(
-                new object(), args => captured = args)
-        };
+        (string entityPath, int maxCount, long? fromSequenceNumber)? captured = null;
+        var panel = new TestPanel { EntityPath = "my/queue" };
+        panel.OnPeek = EventCallback.Factory.Create<(string, int, long?)>(this, args => captured = args);
         panel.RunOnInitialized();
 
         await panel.CallDoPeek();
 
-        captured.entityPath.Should().Be("my-queue");
-        captured.maxCount.Should().Be(10);
-        captured.fromSequenceNumber.Should().BeNull();
+        captured.Should().NotBeNull();
+        captured!.Value.entityPath.Should().Be("my/queue");
+        captured.Value.maxCount.Should().Be(10);
+        captured.Value.fromSequenceNumber.Should().BeNull();
     }
 
     // --- DoLoadMore ---
 
     [Fact]
-    public async Task DoLoadMore_WithNoMessages_InvokesOnPeekWithNullFromSequence()
+    public async Task DoLoadMore_WithNoMessages_InvokesOnPeekWithNullFromSequenceNumber()
     {
-        (string entityPath, int maxCount, long? fromSequenceNumber) captured = default;
-        var panel = new TestPanel
-        {
-            EntityPath = "my-queue",
-            Messages = new List<BrowsedMessage>(),
-            OnPeek = EventCallback.Factory.Create<(string, int, long?)>(
-                new object(), args => captured = args)
-        };
+        (string entityPath, int maxCount, long? fromSequenceNumber)? captured = null;
+        var panel = new TestPanel { EntityPath = "my/queue", Messages = new() };
+        panel.OnPeek = EventCallback.Factory.Create<(string, int, long?)>(this, args => captured = args);
         panel.RunOnInitialized();
 
         await panel.CallDoLoadMore();
 
-        captured.fromSequenceNumber.Should().BeNull();
+        captured.Should().NotBeNull();
+        captured!.Value.fromSequenceNumber.Should().BeNull();
     }
 
     [Fact]
-    public async Task DoLoadMore_WithMessages_InvokesOnPeekWithMaxSequencePlusOne()
+    public async Task DoLoadMore_WithMessages_InvokesOnPeekWithFromSequenceNumberAfterMaxSeq()
     {
-        (string entityPath, int maxCount, long? fromSequenceNumber) captured = default;
+        (string entityPath, int maxCount, long? fromSequenceNumber)? captured = null;
         var panel = new TestPanel
         {
-            EntityPath = "my-queue",
-            Messages =
-            [
-                new BrowsedMessage { SequenceNumber = 5 },
-                new BrowsedMessage { SequenceNumber = 10 },
-                new BrowsedMessage { SequenceNumber = 3 },
-            ],
-            OnPeek = EventCallback.Factory.Create<(string, int, long?)>(
-                new object(), args => captured = args)
+            EntityPath = "my/queue",
+            Messages = new() { new() { SequenceNumber = 5 }, new() { SequenceNumber = 10 }, new() { SequenceNumber = 3 } }
         };
+        panel.OnPeek = EventCallback.Factory.Create<(string, int, long?)>(this, args => captured = args);
         panel.RunOnInitialized();
 
         await panel.CallDoLoadMore();
 
-        captured.fromSequenceNumber.Should().Be(11);
+        captured.Should().NotBeNull();
+        captured!.Value.fromSequenceNumber.Should().Be(11); // max(10) + 1
     }
 }
