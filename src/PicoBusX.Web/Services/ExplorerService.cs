@@ -114,7 +114,7 @@ public class ExplorerService(
         return result;
     }
 
-    private async Task<T?> TryGetRuntimePropertiesAsync<T>(
+    private static async Task<T?> TryGetRuntimePropertiesAsync<T>(
         Func<Task<T>> fetch,
         Action<Exception> onFailure) where T : class
     {
