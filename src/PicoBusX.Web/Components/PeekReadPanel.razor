@@ -1,19 +1,15 @@
-@using PicoBusX.Web.Models
 @inherits MessagePanelBase
 
 <div class="peek-panel">
-    <FluentCard Style="margin-bottom: 1rem;">
-        <FluentStack Orientation="Orientation.Horizontal" Style="align-items: flex-end; gap: 1rem; flex-wrap: wrap;">
-            <FluentNumberField Label="Max Messages"
-                               @bind-Value="_maxCount"
-                               Min="1"
-                               Max="500"
-                               Style="width: 120px;" />
-            <FluentTextField Label="Filter"
-                             @bind-Value="_filterText"
-                             Placeholder="MessageId, Subject, Body…"
-                             Style="flex: 1; min-width: 160px;"
-                             Disabled="@IsBusy" />
+    <MessagePanelToolbar MaxCount="@_maxCount"
+                         MaxCountChanged="@((int v) => _maxCount = v)"
+                         FilterText="@_filterText"
+                         FilterTextChanged="@((string v) => _filterText = v)"
+                         IsBusy="@IsBusy"
+                         HasMore="@HasMore"
+                         HasMessages="@Messages.Any()"
+                         OnLoadMore="DoLoadMore">
+        <ActionButtons>
             <FluentButton Appearance="Appearance.Accent"
                           IconStart="@(new Icons.Regular.Size16.Eye())"
                           OnClick="DoPeek"
@@ -26,17 +22,8 @@
                           Disabled="@IsBusy">
                 @if (IsBusy) { <span>Loading…</span> } else { <span>Receive</span> }
             </FluentButton>
-            @if (HasMore && Messages.Any() && !IsBusy)
-            {
-                <FluentButton Appearance="Appearance.Outline"
-                              IconStart="@(new Icons.Regular.Size16.ArrowDown())"
-                              OnClick="DoLoadMore"
-                              Disabled="@IsBusy">
-                    Load More
-                </FluentButton>
-            }
-        </FluentStack>
-    </FluentCard>
+        </ActionButtons>
+    </MessagePanelToolbar>
 
     @if (!string.IsNullOrEmpty(ErrorMessage))
     {

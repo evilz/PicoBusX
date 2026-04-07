@@ -204,15 +204,11 @@ public class ExplorerService(
                 subscriptionName,
                 topicName));
 
-    private static DateTimeOffset? NormalizeTimestamp(DateTimeOffset? value)
-    {
-        return value is null || value == DateTimeOffset.MinValue ? null : value;
-    }
+    private static DateTimeOffset? NormalizeTimestamp(DateTimeOffset? value) =>
+        value is null || value == DateTimeOffset.MinValue ? null : value;
 
-    private static string? NormalizeText(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? null : value;
-    }
+    private static string? NormalizeText(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
 
     private static bool IsConnectivityError(Exception ex)
     {

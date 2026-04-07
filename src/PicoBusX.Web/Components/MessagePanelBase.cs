@@ -22,14 +22,13 @@ public abstract class MessagePanelBase : ComponentBase
     protected HashSet<long> _expanded = new();
     protected string _filterText = string.Empty;
 
-    protected override void OnInitialized()
-    {
-        _maxCount = DefaultMaxCount > 0 ? DefaultMaxCount : 10;
-    }
+    private int ResolvedMaxCount => DefaultMaxCount > 0 ? DefaultMaxCount : 10;
+
+    protected override void OnInitialized() => _maxCount = ResolvedMaxCount;
 
     protected override void OnParametersSet()
     {
-        if (_maxCount == 0) _maxCount = DefaultMaxCount > 0 ? DefaultMaxCount : 10;
+        if (_maxCount == 0) _maxCount = ResolvedMaxCount;
     }
 
     protected virtual async Task DoPeek() => await OnPeek.InvokeAsync((EntityPath, _maxCount, null));
@@ -42,8 +41,8 @@ public abstract class MessagePanelBase : ComponentBase
 
     protected void ToggleMessage(long sequenceNumber)
     {
-        if (_expanded.Contains(sequenceNumber)) _expanded.Remove(sequenceNumber);
-        else _expanded.Add(sequenceNumber);
+        if (!_expanded.Remove(sequenceNumber))
+            _expanded.Add(sequenceNumber);
     }
 
     /// <summary>
