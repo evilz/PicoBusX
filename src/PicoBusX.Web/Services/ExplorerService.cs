@@ -134,7 +134,7 @@ public class ExplorerService(
         string queueName,
         CancellationToken ct) =>
         TryGetRuntimePropertiesAsync<QueueRuntimeProperties>(
-            async () => await admin.GetQueueRuntimePropertiesAsync(queueName, ct),
+            () => admin.GetQueueRuntimePropertiesAsync(queueName, ct),
             ex => logger.LogWarning(ex, "Failed to get runtime properties for queue {QueueName}", queueName));
 
     private Task<TopicRuntimeProperties?> TryGetTopicRuntimePropertiesAsync(
@@ -142,7 +142,7 @@ public class ExplorerService(
         string topicName,
         CancellationToken ct) =>
         TryGetRuntimePropertiesAsync<TopicRuntimeProperties>(
-            async () => await admin.GetTopicRuntimePropertiesAsync(topicName, ct),
+            () => admin.GetTopicRuntimePropertiesAsync(topicName, ct),
             ex => logger.LogWarning(ex, "Failed to get runtime properties for topic {TopicName}", topicName));
 
     private async Task<List<SubscriptionInfo>> GetSubscriptionsForTopicAsync(
@@ -197,17 +197,15 @@ public class ExplorerService(
         string subscriptionName,
         CancellationToken ct) =>
         TryGetRuntimePropertiesAsync<SubscriptionRuntimeProperties>(
-            async () => await admin.GetSubscriptionRuntimePropertiesAsync(topicName, subscriptionName, ct),
+            () => admin.GetSubscriptionRuntimePropertiesAsync(topicName, subscriptionName, ct),
             ex => logger.LogWarning(
                 ex,
                 "Failed to get runtime properties for subscription {SubscriptionName} on topic {TopicName}",
                 subscriptionName,
                 topicName));
 
-    private static DateTimeOffset? NormalizeTimestamp(DateTimeOffset? value)
-    {
-        return value is null || value == DateTimeOffset.MinValue ? null : value;
-    }
+    private static DateTimeOffset? NormalizeTimestamp(DateTimeOffset? value) =>
+        value is null || value == DateTimeOffset.MinValue ? null : value;
 
     private static string? NormalizeText(string? value)
     {

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Components;
 using PicoBusX.Web.Models;
+using System.Text.Json;
 
 namespace PicoBusX.Web.Components;
 
@@ -19,7 +20,7 @@ public abstract class MessagePanelBase : ComponentBase
     [Parameter] public string? ErrorMessage { get; set; }
 
     protected int _maxCount;
-    protected HashSet<long> _expanded = new();
+    protected readonly HashSet<long> _expanded = new();
     protected string _filterText = string.Empty;
 
     protected override void OnInitialized()
@@ -32,7 +33,7 @@ public abstract class MessagePanelBase : ComponentBase
         if (_maxCount == 0) _maxCount = DefaultMaxCount > 0 ? DefaultMaxCount : 10;
     }
 
-    protected virtual async Task DoPeek() => await OnPeek.InvokeAsync((EntityPath, _maxCount, null));
+    protected virtual Task DoPeek() => OnPeek.InvokeAsync((EntityPath, _maxCount, null));
 
     protected virtual async Task DoLoadMore()
     {
@@ -72,15 +73,17 @@ public abstract class MessagePanelBase : ComponentBase
     private static bool ContainsIgnoreCase(string? value, string term) =>
         !string.IsNullOrEmpty(value) && value.Contains(term, StringComparison.OrdinalIgnoreCase);
 
+    private static readonly JsonSerializerOptions s_indentedOptions = new() { WriteIndented = true };
+
     public static string PrettyPrint(string body)
     {
         if (string.IsNullOrWhiteSpace(body)) return "(empty)";
         try
         {
-            using var doc = System.Text.Json.JsonDocument.Parse(body);
-            return System.Text.Json.JsonSerializer.Serialize(doc.RootElement, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            using var doc = JsonDocument.Parse(body);
+            return JsonSerializer.Serialize(doc.RootElement, s_indentedOptions);
         }
-        catch (System.Text.Json.JsonException)
+        catch (JsonException)
         {
             return body;
         }
