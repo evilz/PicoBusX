@@ -24,6 +24,10 @@ Built with **Aspire 13.1.2** for local development orchestration and **Microsoft
 - 📋 **Entity Details** — active message count, dead-letter count, lock duration, session info, timestamps
 - 📤 **Send Message** — JSON editor with Format / Minify / Validate, optional headers, application properties
 - 👁️ **Peek / Read Messages** — non-destructive peek or PeekLock receive, with expandable message cards (body pretty-printed if JSON)
+- ☠️ **Dead-Letter Queue (DLQ) Browser** — dedicated DLQ panel per entity; peek dead-letter messages and resubmit them to the active queue
+- 🔍 **Message Filtering** — real-time client-side filter across Peek and DLQ panels (searches MessageId, Subject, CorrelationId, SessionId, Body, and Application Properties)
+- 🔐 **Flexible Authentication** — Connection String, DefaultAzureCredential (Managed Identity, Azure CLI, Visual Studio), and Service Principal (client secret)
+- ⚙️ **Runtime Connection Settings** — configure and persist connection settings via the browser Settings UI (`/settings`) without restarting
 - ✅ **Connection Status** — banner showing connected/not-connected with error details
 
 ---
@@ -31,7 +35,7 @@ Built with **Aspire 13.1.2** for local development orchestration and **Microsoft
 ## Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) or later
-- An Azure Service Bus namespace with a connection string (Standard or Premium tier)
+- An Azure Service Bus namespace (Standard or Premium tier) — connection string, Managed Identity, or Service Principal credentials
 - (Optional) [Docker Desktop](https://www.docker.com/products/docker-desktop) for running with Aspire
 
 ---
@@ -89,15 +93,24 @@ dotnet test tests/PicoBusX.Web.Tests/PicoBusX.Web.Tests.csproj
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `ServiceBus__SERVICEBUS_CONNECTIONSTRING` | ✅ Yes | — | Azure Service Bus connection string |
+| `ServiceBus__AuthType` | No | `ConnectionString` | Auth type: `ConnectionString`, `DefaultAzureCredential`, or `ServicePrincipal` |
+| `ServiceBus__SERVICEBUS_CONNECTIONSTRING` | ConnectionString only | — | Azure Service Bus connection string |
+| `ServiceBus__SERVICEBUS_ADMINCONNECTIONSTRING` | No | — | Separate admin connection string (if different from the data connection) |
+| `ServiceBus__SERVICEBUS_FULLYQUALIFIEDNAMESPACE` | Azure AD auth | — | Namespace hostname, e.g. `mynamespace.servicebus.windows.net` |
+| `ServiceBus__TenantId` | ServicePrincipal only | — | Azure AD tenant ID |
+| `ServiceBus__ClientId` | ServicePrincipal only | — | Azure AD application (client) ID |
+| `ServiceBus__ClientSecret` | ServicePrincipal only | — | Azure AD client secret |
 | `ServiceBus__TransportType` | No | `AmqpTcp` | `AmqpTcp` or `AmqpWebSockets` |
 | `ServiceBus__EntityMaxPeek` | No | `10` | Default max messages for Peek/Receive |
+
+Connection settings can also be configured at runtime via the **Settings** page (`/settings`) and are persisted to `{ContentRoot}/.picobusx/connection.json`.
 
 ### Alternative: appsettings.json
 
 ```json
 {
   "ServiceBus": {
+    "AuthType": "ConnectionString",
     "SERVICEBUS_CONNECTIONSTRING": "Endpoint=sb://YOUR_NAMESPACE.servicebus.windows.net/;...",
     "TransportType": "AmqpTcp",
     "EntityMaxPeek": 10
@@ -146,21 +159,35 @@ src/
 └── PicoBusX.Web/              # Blazor Server (.NET 10)
     ├── Components/
     │   ├── Pages/
-    │   │   └── Home.razor             # Main dashboard (tree + details + send + peek)
+    │   │   ├── Home.razor             # Main dashboard (tree + details + send + peek + DLQ)
+    │   │   └── Settings.razor         # Runtime connection configuration (/settings)
     │   ├── Layout/
     │   │   └── MainLayout.razor       # Minimal dark-header layout
     │   ├── BusTreeView.razor          # Collapsible tree with search
+    │   ├── DlqPanel.razor             # Dead-letter queue browser with resubmit
     │   ├── EntityDetailsPanel.razor   # Queue/Topic/Subscription property tables
     │   ├── JsonMessageEditor.razor    # JSON textarea editor (format/minify/validate)
+    │   ├── LoadMoreButton.razor       # Shared "load more" action button
+    │   ├── MessageApplicationProperties.razor  # Application properties table
+    │   ├── MessageCard.razor          # Expandable message card (body + properties)
+    │   ├── MessageList.razor          # Shared message list with filter, empty state, load more
+    │   ├── MessagePanelBase.cs        # Shared base class for PeekReadPanel and DlqPanel
+    │   ├── MessagePanelToolbar.razor  # Shared peek toolbar (count, filter, action buttons)
     │   └── PeekReadPanel.razor        # Peek / Receive message browser
+    ├── Formatting/
+    │   └── EntityDisplayFormatter.cs  # Display formatting helpers
     ├── Models/                        # QueueInfo, TopicInfo, BrowsedMessage, etc.
     ├── Options/
-    │   └── ServiceBusConnectionOptions.cs
+    │   └── ServiceBusConnectionOptions.cs  # Auth type, connection string, Azure AD options
     ├── Services/
-    │   ├── ServiceBusClientFactory.cs # Singleton client/admin client factory
-    │   ├── ExplorerService.cs         # List entities + runtime properties
-    │   ├── MessageSenderService.cs    # Send JSON messages
-    │   └── MessageBrowserService.cs   # Peek / Receive messages
+    │   ├── ConnectionSettingsStore.cs      # Persist/load connection settings to disk
+    │   ├── EntityManagementService.cs      # Entity management operations
+    │   ├── ExplorerService.cs              # List entities + runtime properties
+    │   ├── IConnectionSettingsStore.cs
+    │   ├── IExplorerService.cs
+    │   ├── MessageBrowserService.cs        # Peek / Receive / DLQ resubmit
+    │   ├── MessageSenderService.cs         # Send JSON messages
+    │   └── ServiceBusClientFactory.cs      # Singleton client/admin client factory
     ├── Program.cs
     └── appsettings.json
 ```
@@ -170,11 +197,8 @@ src/
 ## Known Limits
 
 - **Azure Service Bus Emulator** — ✅ Supported when running under Aspire
-- **No Azure AD / Managed Identity** support yet — only connection-string auth (SAS)
 - **Peek is non-destructive** — uses `PeekMessages`; Receive uses PeekLock and abandons immediately
-- **No dead-letter browser** — to peek DLQ, set entity path to `<queue>/$DeadLetterQueue`
-- **No message filtering** — peek returns next N messages from the head of the queue/subscription
-- **No reconnect / retry UI** — restart the app if the connection string changes
+- **No reconnect / retry UI** — restart the app if the connection details change (or update them via Settings and refresh)
 - **Sessions** — session-enabled queues/subscriptions are browsed via session receivers; multiple sessions are sampled up to the requested message count
 
 ---
