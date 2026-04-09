@@ -39,10 +39,7 @@ public class MessageBrowserService
         var result = messages.Select(m => MapMessage(m, _logger)).ToList();
         // Abandon all locks so messages are returned to the queue immediately.
         foreach (var m in messages)
-        {
-            try { await receiver.AbandonMessageAsync(m, cancellationToken: ct); }
-            catch (Exception ex) { _logger.LogWarning(ex, "Failed to abandon message {MessageId}", m.MessageId); }
-        }
+            await TryAbandonAsync(receiver, m, "receive-and-abandon", ct);
         return result;
     }
 
@@ -70,10 +67,7 @@ public class MessageBrowserService
             var messages = await sessionReceiver.ReceiveMessagesAsync(remaining, maxWaitTime: TimeSpan.FromSeconds(SessionReceiveWaitSeconds), cancellationToken: ct);
             var result = messages.Select(m => MapMessage(m, _logger)).ToList();
             foreach (var m in messages)
-            {
-                try { await sessionReceiver.AbandonMessageAsync(m, cancellationToken: ct); }
-                catch (Exception ex) { _logger.LogWarning(ex, "Failed to abandon session message {MessageId}", m.MessageId); }
-            }
+                await TryAbandonAsync(sessionReceiver, m, "receive-and-abandon-session", ct);
             return result;
         });
 
@@ -148,10 +142,7 @@ public class MessageBrowserService
         if (target == null)
         {
             foreach (var m in messages)
-            {
-                try { await receiver.AbandonMessageAsync(m, cancellationToken: ct); }
-                catch (Exception ex) { _logger.LogWarning(ex, "Failed to abandon DLQ message {MessageId} during not-found cleanup", m.MessageId); }
-            }
+                await TryAbandonAsync(receiver, m, "dlq-not-found-cleanup", ct);
             throw new InvalidOperationException($"Message with sequence number {sequenceNumber} not found in DLQ.");
         }
 
@@ -175,12 +166,15 @@ public class MessageBrowserService
         await receiver.CompleteMessageAsync(target, ct);
 
         foreach (var m in messages.Where(m => m.SequenceNumber != sequenceNumber))
-        {
-            try { await receiver.AbandonMessageAsync(m, cancellationToken: ct); }
-            catch (Exception ex) { _logger.LogWarning(ex, "Failed to abandon DLQ message {MessageId} after resubmit", m.MessageId); }
-        }
+            await TryAbandonAsync(receiver, m, "dlq-post-resubmit", ct);
 
         _logger.LogInformation("Resubmitted message {SequenceNumber} from DLQ {EntityPath} to {ResendTo}", sequenceNumber, entityPath, resendTo);
+    }
+
+    private async Task TryAbandonAsync(ServiceBusReceiver receiver, ServiceBusReceivedMessage message, string context, CancellationToken ct)
+    {
+        try { await receiver.AbandonMessageAsync(message, cancellationToken: ct); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Failed to abandon message {MessageId} ({Context})", message.MessageId, context); }
     }
 
     private static BrowsedMessage MapMessage(ServiceBusReceivedMessage m, ILogger? logger = null)
