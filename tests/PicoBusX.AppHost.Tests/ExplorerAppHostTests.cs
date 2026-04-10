@@ -47,7 +47,6 @@ public class ExplorerAppHostTests
                 var response = await client.GetAsync("/health");
                 if (response.IsSuccessStatusCode)
                 {
-                    client.Timeout = Timeout.InfiniteTimeSpan;
                     return client;
                 }
             }
