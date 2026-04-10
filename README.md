@@ -24,6 +24,10 @@ Built with **Aspire 13.1.2** for local development orchestration and **Microsoft
 - 📋 **Entity Details** — active message count, dead-letter count, lock duration, session info, timestamps
 - 📤 **Send Message** — JSON editor with Format / Minify / Validate, optional headers, application properties
 - 👁️ **Peek / Read Messages** — non-destructive peek or PeekLock receive, with expandable message cards (body pretty-printed if JSON)
+- 💀 **Dead-Letter Queue Browser** — dedicated panel to peek DLQ messages, view dead-letter reason and error description, and resubmit messages back to the main queue
+- 🔍 **Client-side Message Filter** — filter displayed messages by MessageId, Subject, CorrelationId, SessionId, Body, or Application Properties
+- 🔧 **Entity Management** — create and delete Queues, Topics, and Subscriptions directly from the UI
+- 🔐 **Multiple Auth Methods** — runtime-configurable connection supporting Connection String (SAS), Managed Identity / Default Azure Credential, and Service Principal (Client Secret)
 - ✅ **Connection Status** — banner showing connected/not-connected with error details
 
 ---
@@ -146,21 +150,31 @@ src/
 └── PicoBusX.Web/              # Blazor Server (.NET 10)
     ├── Components/
     │   ├── Pages/
-    │   │   └── Home.razor             # Main dashboard (tree + details + send + peek)
+    │   │   ├── Home.razor             # Main dashboard (tree + details + send + peek)
+    │   │   └── Settings.razor         # Runtime connection configuration
     │   ├── Layout/
     │   │   └── MainLayout.razor       # Minimal dark-header layout
     │   ├── BusTreeView.razor          # Collapsible tree with search
+    │   ├── DlqPanel.razor             # Dead-letter queue browser with resubmit
     │   ├── EntityDetailsPanel.razor   # Queue/Topic/Subscription property tables
     │   ├── JsonMessageEditor.razor    # JSON textarea editor (format/minify/validate)
+    │   ├── LoadMoreButton.razor       # Shared load-more pagination button
+    │   ├── MessageApplicationProperties.razor  # Application properties table
+    │   ├── MessageCard.razor          # Expandable message card
+    │   ├── MessageList.razor          # Message list with filter and load-more
+    │   ├── MessagePanelBase.cs        # Shared base class for peek/DLQ panels
+    │   ├── MessagePanelToolbar.razor  # Shared toolbar (peek count, filter, actions)
     │   └── PeekReadPanel.razor        # Peek / Receive message browser
     ├── Models/                        # QueueInfo, TopicInfo, BrowsedMessage, etc.
     ├── Options/
     │   └── ServiceBusConnectionOptions.cs
     ├── Services/
-    │   ├── ServiceBusClientFactory.cs # Singleton client/admin client factory
-    │   ├── ExplorerService.cs         # List entities + runtime properties
-    │   ├── MessageSenderService.cs    # Send JSON messages
-    │   └── MessageBrowserService.cs   # Peek / Receive messages
+    │   ├── ServiceBusClientFactory.cs    # Singleton client/admin client factory
+    │   ├── IExplorerService.cs / ExplorerService.cs  # List entities + runtime properties
+    │   ├── MessageSenderService.cs       # Send JSON messages
+    │   ├── MessageBrowserService.cs      # Peek / Receive messages
+    │   ├── EntityManagementService.cs    # Create / delete queues, topics, subscriptions
+    │   └── IConnectionSettingsStore.cs / ConnectionSettingsStore.cs  # Runtime connection persistence
     ├── Program.cs
     └── appsettings.json
 ```
@@ -170,11 +184,9 @@ src/
 ## Known Limits
 
 - **Azure Service Bus Emulator** — ✅ Supported when running under Aspire
-- **No Azure AD / Managed Identity** support yet — only connection-string auth (SAS)
 - **Peek is non-destructive** — uses `PeekMessages`; Receive uses PeekLock and abandons immediately
-- **No dead-letter browser** — to peek DLQ, set entity path to `<queue>/$DeadLetterQueue`
-- **No message filtering** — peek returns next N messages from the head of the queue/subscription
-- **No reconnect / retry UI** — restart the app if the connection string changes
+- **Message filter is client-side** — filter applies to already-loaded messages; peek always fetches from the head of the queue
+- **No reconnect / retry UI** — use the Settings page to update connection details if the connection changes
 - **Sessions** — session-enabled queues/subscriptions are browsed via session receivers; multiple sessions are sampled up to the requested message count
 
 ---
