@@ -429,7 +429,11 @@
 
     private async Task HandlePeekAsync((string entityPath, int maxCount, long? fromSequenceNumber) args)
     {
-        if (!args.fromSequenceNumber.HasValue) { _browsedMessages = new(); _hasMoreMessages = false; }
+        if (!args.fromSequenceNumber.HasValue)
+        {
+            _browsedMessages = new();
+            _hasMoreMessages = false;
+        }
         await ExecutePeekAsync(
             ct => IsSessionEnabled()
                 ? MessageBrowserService.PeekSessionMessagesAsync(Factory.GetClient(), args.entityPath, args.maxCount, ct)
@@ -470,7 +474,11 @@
 
     private async Task HandleDlqPeekAsync((string entityPath, int maxCount, long? fromSequenceNumber) args)
     {
-        if (!args.fromSequenceNumber.HasValue) { _dlqMessages = new(); _hasMoreDlqMessages = false; }
+        if (!args.fromSequenceNumber.HasValue)
+        {
+            _dlqMessages = new();
+            _hasMoreDlqMessages = false;
+        }
         await ExecutePeekAsync(
             ct => Browser.PeekDeadLetterAsync(args.entityPath, args.maxCount, args.fromSequenceNumber, ct),
             busy => _dlqBusy = busy,
