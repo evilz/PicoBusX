@@ -104,15 +104,14 @@ public class ServiceBusClientFactory : IAsyncDisposable
         _lock.Wait();
         try
         {
-            if (field is null)
-                field = factory();
+            field ??= factory();
         }
         finally
         {
             _lock.Release();
         }
 
-        return field;
+        return field!;
     }
 
     public async ValueTask DisposeAsync()
