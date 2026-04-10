@@ -89,44 +89,29 @@ public class ServiceBusClientFactory : IAsyncDisposable
         }
     }
 
-    public ServiceBusClient GetClient()
+    public ServiceBusClient GetClient() =>
+        GetOrCreate(ref _client, () => CreateClient(GetEffectiveOptions()));
+
+    public ServiceBusAdministrationClient GetAdminClient() =>
+        GetOrCreate(ref _adminClient, () => CreateAdminClientFromOptions(GetEffectiveOptions(), _logger));
+
+    private T GetOrCreate<T>(ref T? field, Func<T> factory) where T : class
     {
-        if (_client is not null) return _client;
+        if (field is not null) return field;
         if (!IsConfigured)
             throw new InvalidOperationException("Azure Service Bus is not configured. Please configure the connection in Settings.");
 
         _lock.Wait();
         try
         {
-            if (_client is not null) return _client;
-            _client = CreateClient(GetEffectiveOptions());
+            field ??= factory();
         }
         finally
         {
             _lock.Release();
         }
 
-        return _client;
-    }
-
-    public ServiceBusAdministrationClient GetAdminClient()
-    {
-        if (_adminClient is not null) return _adminClient;
-        if (!IsConfigured)
-            throw new InvalidOperationException("Azure Service Bus is not configured. Please configure the connection in Settings.");
-
-        _lock.Wait();
-        try
-        {
-            if (_adminClient is not null) return _adminClient;
-            _adminClient = CreateAdminClientFromOptions(GetEffectiveOptions(), _logger);
-        }
-        finally
-        {
-            _lock.Release();
-        }
-
-        return _adminClient;
+        return field!;
     }
 
     public async ValueTask DisposeAsync()
