@@ -38,10 +38,10 @@ public class EntityManagementService(
 
     private async Task ExecuteAdminOperationAsync(
         Func<ServiceBusAdministrationClient, Task> operation,
-        Action logAction)
+        Action logSuccess)
     {
         var admin = factory.GetAdminClient();
         await operation(admin);
-        logAction();
+        logSuccess();
     }
 }

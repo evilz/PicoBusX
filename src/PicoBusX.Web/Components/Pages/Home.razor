@@ -427,19 +427,22 @@
         _ => false
     };
 
-    private async Task HandlePeekAsync((string entityPath, int maxCount, long? fromSequenceNumber) args) =>
+    private async Task HandlePeekAsync((string entityPath, int maxCount, long? fromSequenceNumber) args)
+    {
+        if (!args.fromSequenceNumber.HasValue) { _browsedMessages = new(); _hasMoreMessages = false; }
         await ExecutePeekAsync(
             ct => IsSessionEnabled()
                 ? MessageBrowserService.PeekSessionMessagesAsync(Factory.GetClient(), args.entityPath, args.maxCount, ct)
                 : Browser.PeekMessagesAsync(args.entityPath, args.maxCount, args.fromSequenceNumber, ct),
             busy => _browsing = busy,
             err => _browseError = err,
-            () => _browsedMessages,
-            msgs => _browsedMessages = msgs,
-            more => _hasMoreMessages = more,
-            batch => !IsSessionEnabled() && batch.Count >= args.maxCount,
-            ex => Logger.LogError(ex, "Failed to peek messages"),
-            args.fromSequenceNumber);
+            batch =>
+            {
+                _browsedMessages = args.fromSequenceNumber.HasValue ? _browsedMessages.Concat(batch).ToList() : batch;
+                _hasMoreMessages = !IsSessionEnabled() && batch.Count >= args.maxCount;
+            },
+            ex => Logger.LogError(ex, "Failed to peek messages"));
+    }
 
     private async Task HandleReceiveAsync((string entityPath, int maxCount) args)
     {
@@ -465,43 +468,36 @@
         }
     }
 
-    private async Task HandleDlqPeekAsync((string entityPath, int maxCount, long? fromSequenceNumber) args) =>
+    private async Task HandleDlqPeekAsync((string entityPath, int maxCount, long? fromSequenceNumber) args)
+    {
+        if (!args.fromSequenceNumber.HasValue) { _dlqMessages = new(); _hasMoreDlqMessages = false; }
         await ExecutePeekAsync(
             ct => Browser.PeekDeadLetterAsync(args.entityPath, args.maxCount, args.fromSequenceNumber, ct),
             busy => _dlqBusy = busy,
             err => _dlqError = err,
-            () => _dlqMessages,
-            msgs => _dlqMessages = msgs,
-            more => _hasMoreDlqMessages = more,
-            batch => batch.Count >= args.maxCount,
-            ex => Logger.LogError(ex, "Failed to peek DLQ messages"),
-            args.fromSequenceNumber);
+            batch =>
+            {
+                _dlqMessages = args.fromSequenceNumber.HasValue ? _dlqMessages.Concat(batch).ToList() : batch;
+                _hasMoreDlqMessages = batch.Count >= args.maxCount;
+            },
+            ex => Logger.LogError(ex, "Failed to peek DLQ messages"));
+    }
 
     private async Task ExecutePeekAsync(
         Func<CancellationToken, Task<List<BrowsedMessage>>> fetchFunc,
         Action<bool> setBusy,
         Action<string?> setError,
-        Func<List<BrowsedMessage>> getMessages,
-        Action<List<BrowsedMessage>> setMessages,
-        Action<bool> setHasMore,
-        Func<List<BrowsedMessage>, bool> computeHasMore,
-        Action<Exception> logError,
-        long? fromSequenceNumber)
+        Action<List<BrowsedMessage>> onSuccess,
+        Action<Exception> logError)
     {
         setBusy(true);
         setError(null);
-        if (!fromSequenceNumber.HasValue)
-        {
-            setMessages(new());
-            setHasMore(false);
-        }
         StateHasChanged();
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             var batch = await fetchFunc(cts.Token);
-            setMessages(fromSequenceNumber.HasValue ? getMessages().Concat(batch).ToList() : batch);
-            setHasMore(computeHasMore(batch));
+            onSuccess(batch);
         }
         catch (Exception ex)
         {
