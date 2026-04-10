@@ -38,18 +38,20 @@ public class ExplorerAppHostTests
     private static async Task<HttpClient> CreateReadyClientAsync(DistributedApplication app)
     {
         var client = app.CreateHttpClient("PicoBusX");
+        client.Timeout = TimeSpan.FromSeconds(10);
 
-        for (var attempt = 0; attempt < 30; attempt++)
+        for (var attempt = 0; attempt < 60; attempt++)
         {
             try
             {
                 var response = await client.GetAsync("/health");
                 if (response.IsSuccessStatusCode)
                 {
+                    client.Timeout = Timeout.InfiniteTimeSpan;
                     return client;
                 }
             }
-            catch (HttpRequestException)
+            catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
             {
             }
 
