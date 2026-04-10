@@ -6,45 +6,42 @@ public class EntityManagementService(
     ServiceBusClientFactory factory,
     ILogger<EntityManagementService> logger)
 {
-    public async Task CreateQueueAsync(string name, CancellationToken ct = default)
-    {
-        var admin = factory.GetAdminClient();
-        await admin.CreateQueueAsync(name, ct);
-        logger.LogInformation("Created queue {QueueName}", name);
-    }
+    public Task CreateQueueAsync(string name, CancellationToken ct = default) =>
+        ExecuteAdminOperationAsync(
+            admin => admin.CreateQueueAsync(name, ct),
+            () => logger.LogInformation("Created queue {QueueName}", name));
 
-    public async Task CreateTopicAsync(string name, CancellationToken ct = default)
-    {
-        var admin = factory.GetAdminClient();
-        await admin.CreateTopicAsync(name, ct);
-        logger.LogInformation("Created topic {TopicName}", name);
-    }
+    public Task CreateTopicAsync(string name, CancellationToken ct = default) =>
+        ExecuteAdminOperationAsync(
+            admin => admin.CreateTopicAsync(name, ct),
+            () => logger.LogInformation("Created topic {TopicName}", name));
 
-    public async Task CreateSubscriptionAsync(string topicName, string subscriptionName, CancellationToken ct = default)
-    {
-        var admin = factory.GetAdminClient();
-        await admin.CreateSubscriptionAsync(topicName, subscriptionName, ct);
-        logger.LogInformation("Created subscription {SubscriptionName} on topic {TopicName}", subscriptionName, topicName);
-    }
+    public Task CreateSubscriptionAsync(string topicName, string subscriptionName, CancellationToken ct = default) =>
+        ExecuteAdminOperationAsync(
+            admin => admin.CreateSubscriptionAsync(topicName, subscriptionName, ct),
+            () => logger.LogInformation("Created subscription {SubscriptionName} on topic {TopicName}", subscriptionName, topicName));
 
-    public async Task DeleteQueueAsync(string name, CancellationToken ct = default)
-    {
-        var admin = factory.GetAdminClient();
-        await admin.DeleteQueueAsync(name, ct);
-        logger.LogInformation("Deleted queue {QueueName}", name);
-    }
+    public Task DeleteQueueAsync(string name, CancellationToken ct = default) =>
+        ExecuteAdminOperationAsync(
+            admin => admin.DeleteQueueAsync(name, ct),
+            () => logger.LogInformation("Deleted queue {QueueName}", name));
 
-    public async Task DeleteTopicAsync(string name, CancellationToken ct = default)
-    {
-        var admin = factory.GetAdminClient();
-        await admin.DeleteTopicAsync(name, ct);
-        logger.LogInformation("Deleted topic {TopicName}", name);
-    }
+    public Task DeleteTopicAsync(string name, CancellationToken ct = default) =>
+        ExecuteAdminOperationAsync(
+            admin => admin.DeleteTopicAsync(name, ct),
+            () => logger.LogInformation("Deleted topic {TopicName}", name));
 
-    public async Task DeleteSubscriptionAsync(string topicName, string subscriptionName, CancellationToken ct = default)
+    public Task DeleteSubscriptionAsync(string topicName, string subscriptionName, CancellationToken ct = default) =>
+        ExecuteAdminOperationAsync(
+            admin => admin.DeleteSubscriptionAsync(topicName, subscriptionName, ct),
+            () => logger.LogInformation("Deleted subscription {SubscriptionName} on topic {TopicName}", subscriptionName, topicName));
+
+    private async Task ExecuteAdminOperationAsync(
+        Func<ServiceBusAdministrationClient, Task> operation,
+        Action logSuccess)
     {
         var admin = factory.GetAdminClient();
-        await admin.DeleteSubscriptionAsync(topicName, subscriptionName, ct);
-        logger.LogInformation("Deleted subscription {SubscriptionName} on topic {TopicName}", subscriptionName, topicName);
+        await operation(admin);
+        logSuccess();
     }
 }

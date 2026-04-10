@@ -2,26 +2,17 @@
 @inherits MessagePanelBase
 
 <div class="peek-panel">
-    <MessagePanelToolbar @bind-MaxCount="_maxCount"
-                         @bind-FilterText="_filterText"
+    <MessagePanelToolbar MaxCount="@_maxCount"
+                         MaxCountChanged="@(v => _maxCount = v)"
+                         FilterText="@_filterText"
+                         FilterTextChanged="@(v => _filterText = v)"
+                         OnPeek="DoPeek"
+                         PeekLabel="Peek DLQ"
                          IsBusy="@IsBusy"
                          HasMore="@HasMore"
                          HasMessages="@Messages.Any()"
-                         OnLoadMore="DoLoadMore">
-        <ActionButtons>
-            <FluentButton Appearance="Appearance.Accent"
-                          IconStart="@(new Icons.Regular.Size16.Eye())"
-                          OnClick="DoPeek"
-                          Disabled="@IsBusy">
-                @if (IsBusy) { <span>Loading…</span> } else { <span>Peek DLQ</span> }
-            </FluentButton>
-        </ActionButtons>
-    </MessagePanelToolbar>
-
-    @if (!string.IsNullOrEmpty(ErrorMessage))
-    {
-        <FluentMessageBar Intent="MessageIntent.Error" Style="margin-bottom: 1rem;">@ErrorMessage</FluentMessageBar>
-    }
+                         OnLoadMore="DoLoadMore"
+                         ErrorMessage="@ErrorMessage" />
 
     <MessageList FilteredMessages="@FilterMessages(Messages)"
                  TotalCount="@Messages.Count"

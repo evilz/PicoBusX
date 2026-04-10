@@ -12,6 +12,12 @@
                          Placeholder="MessageId, Subject, Body…"
                          Style="flex: 1; min-width: 160px;"
                          Disabled="@IsBusy" />
+        <FluentButton Appearance="Appearance.Accent"
+                      IconStart="@(new Icons.Regular.Size16.Eye())"
+                      OnClick="OnPeek"
+                      Disabled="@IsBusy">
+            @if (IsBusy) { <span>Loading…</span> } else { <span>@PeekLabel</span> }
+        </FluentButton>
         @ActionButtons
         @if (HasMore && HasMessages && !IsBusy)
         {
@@ -25,6 +31,11 @@
     </FluentStack>
 </FluentCard>
 
+@if (!string.IsNullOrEmpty(ErrorMessage))
+{
+    <FluentMessageBar Intent="MessageIntent.Error" Style="margin-bottom: 1rem;">@ErrorMessage</FluentMessageBar>
+}
+
 @code {
     [Parameter] public int MaxCount { get; set; }
     [Parameter] public EventCallback<int> MaxCountChanged { get; set; }
@@ -34,5 +45,8 @@
     [Parameter] public bool HasMore { get; set; }
     [Parameter] public bool HasMessages { get; set; }
     [Parameter] public EventCallback OnLoadMore { get; set; }
+    [Parameter] public EventCallback OnPeek { get; set; }
+    [Parameter] public string PeekLabel { get; set; } = "Peek";
+    [Parameter] public string? ErrorMessage { get; set; }
     [Parameter] public RenderFragment? ActionButtons { get; set; }
 }
