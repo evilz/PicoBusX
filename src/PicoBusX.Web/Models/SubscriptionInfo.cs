@@ -1,6 +1,6 @@
 namespace PicoBusX.Web.Models;
 
-public class SubscriptionInfo
+public class SubscriptionInfo : IQueueLikeEntity
 {
     public string TopicName { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;

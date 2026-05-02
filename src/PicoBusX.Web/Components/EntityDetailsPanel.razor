@@ -138,21 +138,9 @@
             new("Scheduled Messages", queue.ScheduledMessageCount.ToString()),
             new("Transfer Messages", queue.TransferMessageCount.ToString()),
             new("Size", EntityDisplayFormatter.FormatSize(queue.SizeInBytes)),
-            new("Created At", EntityDisplayFormatter.FormatDate(queue.CreatedAt)),
-            new("Updated At", EntityDisplayFormatter.FormatDate(queue.UpdatedAt)),
-            new("Accessed At", EntityDisplayFormatter.FormatDate(queue.AccessedAt)),
-            new("Lock Duration", EntityDisplayFormatter.FormatTimeSpan(queue.LockDuration)),
-            new("Max Delivery Count", queue.MaxDeliveryCount.ToString()),
-            new("Requires Session", EntityDisplayFormatter.FormatBoolean(queue.RequiresSession)),
             new("Max Size", EntityDisplayFormatter.FormatMegabytes(queue.MaxSizeInMegabytes)),
-            new("Default Message TTL", EntityDisplayFormatter.FormatTimeSpan(queue.DefaultMessageTimeToLive)),
-            new("Auto Delete On Idle", EntityDisplayFormatter.FormatTimeSpan(queue.AutoDeleteOnIdle)),
             new("Enable Partitioning", EntityDisplayFormatter.FormatBoolean(queue.EnablePartitioning)),
-            new("Enable Batched Operations", EntityDisplayFormatter.FormatBoolean(queue.EnableBatchedOperations)),
-            new("Forward To", EntityDisplayFormatter.FormatText(queue.ForwardTo)),
-            new("Forward Dead-Lettered Messages To", EntityDisplayFormatter.FormatText(queue.ForwardDeadLetteredMessagesTo)),
-            new("Dead-Letter On Message Expiration", EntityDisplayFormatter.FormatBoolean(queue.DeadLetteringOnMessageExpiration)),
-            new("Status", EntityDisplayFormatter.FormatText(queue.Status))
+            ..BuildCommonQueueLikeRows(queue)
         ];
     }
 
@@ -189,20 +177,28 @@
             new("Dead-Letter Messages", subscription.DeadLetterMessageCount.ToString()),
             new("Transfer Messages", subscription.TransferMessageCount.ToString()),
             new("Transfer Dead-Letter Messages", subscription.TransferDeadLetterMessageCount.ToString()),
-            new("Created At", EntityDisplayFormatter.FormatDate(subscription.CreatedAt)),
-            new("Updated At", EntityDisplayFormatter.FormatDate(subscription.UpdatedAt)),
-            new("Accessed At", EntityDisplayFormatter.FormatDate(subscription.AccessedAt)),
-            new("Lock Duration", EntityDisplayFormatter.FormatTimeSpan(subscription.LockDuration)),
-            new("Max Delivery Count", subscription.MaxDeliveryCount.ToString()),
-            new("Requires Session", EntityDisplayFormatter.FormatBoolean(subscription.RequiresSession)),
-            new("Default Message TTL", EntityDisplayFormatter.FormatTimeSpan(subscription.DefaultMessageTimeToLive)),
-            new("Auto Delete On Idle", EntityDisplayFormatter.FormatTimeSpan(subscription.AutoDeleteOnIdle)),
-            new("Enable Batched Operations", EntityDisplayFormatter.FormatBoolean(subscription.EnableBatchedOperations)),
-            new("Dead-Letter On Message Expiration", EntityDisplayFormatter.FormatBoolean(subscription.DeadLetteringOnMessageExpiration)),
             new("Dead-Letter On Filter Evaluation Exceptions", EntityDisplayFormatter.FormatBoolean(subscription.DeadLetteringOnFilterEvaluationExceptions)),
-            new("Forward To", EntityDisplayFormatter.FormatText(subscription.ForwardTo)),
-            new("Forward Dead-Lettered Messages To", EntityDisplayFormatter.FormatText(subscription.ForwardDeadLetteredMessagesTo)),
-            new("Status", EntityDisplayFormatter.FormatText(subscription.Status))
+            ..BuildCommonQueueLikeRows(subscription)
+        ];
+    }
+
+    private static IReadOnlyList<DetailRow> BuildCommonQueueLikeRows(IQueueLikeEntity entity)
+    {
+        return
+        [
+            new("Created At", EntityDisplayFormatter.FormatDate(entity.CreatedAt)),
+            new("Updated At", EntityDisplayFormatter.FormatDate(entity.UpdatedAt)),
+            new("Accessed At", EntityDisplayFormatter.FormatDate(entity.AccessedAt)),
+            new("Lock Duration", EntityDisplayFormatter.FormatTimeSpan(entity.LockDuration)),
+            new("Max Delivery Count", entity.MaxDeliveryCount.ToString()),
+            new("Requires Session", EntityDisplayFormatter.FormatBoolean(entity.RequiresSession)),
+            new("Default Message TTL", EntityDisplayFormatter.FormatTimeSpan(entity.DefaultMessageTimeToLive)),
+            new("Auto Delete On Idle", EntityDisplayFormatter.FormatTimeSpan(entity.AutoDeleteOnIdle)),
+            new("Enable Batched Operations", EntityDisplayFormatter.FormatBoolean(entity.EnableBatchedOperations)),
+            new("Forward To", EntityDisplayFormatter.FormatText(entity.ForwardTo)),
+            new("Forward Dead-Lettered Messages To", EntityDisplayFormatter.FormatText(entity.ForwardDeadLetteredMessagesTo)),
+            new("Dead-Letter On Message Expiration", EntityDisplayFormatter.FormatBoolean(entity.DeadLetteringOnMessageExpiration)),
+            new("Status", EntityDisplayFormatter.FormatText(entity.Status))
         ];
     }
 }

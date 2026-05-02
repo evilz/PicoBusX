@@ -1,6 +1,6 @@
 namespace PicoBusX.Web.Models;
 
-public class QueueInfo
+public class QueueInfo : IQueueLikeEntity
 {
     public string Name { get; set; } = string.Empty;
     public long ActiveMessageCount { get; set; }
