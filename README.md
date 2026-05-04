@@ -24,6 +24,10 @@ Built with **Aspire 13.1.2** for local development orchestration and **Microsoft
 - 📋 **Entity Details** — active message count, dead-letter count, lock duration, session info, timestamps
 - 📤 **Send Message** — JSON editor with Format / Minify / Validate, optional headers, application properties
 - 👁️ **Peek / Read Messages** — non-destructive peek or PeekLock receive, with expandable message cards (body pretty-printed if JSON)
+- ☠️ **Dead-Letter Queue Browser** — peek DLQ messages with dead-letter reason and error description; resubmit messages back to the main entity
+- 🏗️ **Entity Management** — create and delete queues, topics, and subscriptions from the UI
+- ⚙️ **Runtime Connection Settings** — configure the Azure Service Bus connection at `/settings` without restarting the app; settings are persisted to disk
+- 🔑 **Multiple Authentication Modes** — Connection String (SAS), Managed Identity / Default Azure Credential, or Service Principal (client secret)
 - ✅ **Connection Status** — banner showing connected/not-connected with error details
 
 ---
@@ -87,25 +91,38 @@ dotnet test tests/PicoBusX.Web.Tests/PicoBusX.Web.Tests.csproj
 
 ## Environment Variables
 
+Authentication mode is selected with `ServiceBus__AuthType`. The default is `ConnectionString`.
+
+### Connection String (SAS)
+
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `ServiceBus__SERVICEBUS_CONNECTIONSTRING` | ✅ Yes | — | Azure Service Bus connection string |
+| `ServiceBus__AuthType` | No | `ConnectionString` | Set to `ConnectionString` |
+| `ServiceBus__SERVICEBUS_CONNECTIONSTRING` | ✅ Yes | — | Azure Service Bus SAS connection string |
+| `ServiceBus__SERVICEBUS_ADMINCONNECTIONSTRING` | No | — | Separate connection string for management operations (list/create/delete entities). Falls back to the main connection string if omitted. |
 | `ServiceBus__TransportType` | No | `AmqpTcp` | `AmqpTcp` or `AmqpWebSockets` |
 | `ServiceBus__EntityMaxPeek` | No | `10` | Default max messages for Peek/Receive |
 
-### Alternative: appsettings.json
+### Managed Identity / Default Azure Credential
 
-```json
-{
-  "ServiceBus": {
-    "SERVICEBUS_CONNECTIONSTRING": "Endpoint=sb://YOUR_NAMESPACE.servicebus.windows.net/;...",
-    "TransportType": "AmqpTcp",
-    "EntityMaxPeek": 10
-  }
-}
-```
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ServiceBus__AuthType` | ✅ Yes | — | Set to `DefaultAzureCredential` |
+| `ServiceBus__SERVICEBUS_FULLYQUALIFIEDNAMESPACE` | ✅ Yes | — | Namespace hostname, e.g. `myns.servicebus.windows.net` |
+| `ServiceBus__TransportType` | No | `AmqpTcp` | `AmqpTcp` or `AmqpWebSockets` |
 
-> **⚠️ Never commit credentials to source control.** Prefer environment variables or user secrets for local development.
+### Service Principal (Client Secret)
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ServiceBus__AuthType` | ✅ Yes | — | Set to `ServicePrincipal` |
+| `ServiceBus__SERVICEBUS_FULLYQUALIFIEDNAMESPACE` | ✅ Yes | — | Namespace hostname, e.g. `myns.servicebus.windows.net` |
+| `ServiceBus__TenantId` | ✅ Yes | — | Microsoft Entra tenant ID |
+| `ServiceBus__ClientId` | ✅ Yes | — | Application (client) ID |
+| `ServiceBus__ClientSecret` | ✅ Yes | — | Client secret value |
+| `ServiceBus__TransportType` | No | `AmqpTcp` | `AmqpTcp` or `AmqpWebSockets` |
+
+> **⚠️ Never commit credentials to source control.** Prefer environment variables or user secrets for local development. You can also configure the connection at runtime via the **Settings** page (`/settings`) — no restart required.
 
 ---
 
@@ -139,28 +156,36 @@ docker run \
 ```
 src/
 ├── PicoBusX.AppHost/          # Aspire Host (.NET 10)
-│   ├── Program.cs             # Aspire orchestration configuration
+│   ├── AppHost.cs             # Aspire orchestration configuration
 │   ├── PicoBusX.AppHost.csproj
 │   └── README.md              # Detailed Aspire documentation
 │
 └── PicoBusX.Web/              # Blazor Server (.NET 10)
     ├── Components/
     │   ├── Pages/
-    │   │   └── Home.razor             # Main dashboard (tree + details + send + peek)
+    │   │   ├── Home.razor             # Main dashboard (tree + details + send + peek + DLQ)
+    │   │   └── Settings.razor         # Runtime connection settings
     │   ├── Layout/
     │   │   └── MainLayout.razor       # Minimal dark-header layout
     │   ├── BusTreeView.razor          # Collapsible tree with search
     │   ├── EntityDetailsPanel.razor   # Queue/Topic/Subscription property tables
     │   ├── JsonMessageEditor.razor    # JSON textarea editor (format/minify/validate)
-    │   └── PeekReadPanel.razor        # Peek / Receive message browser
-    ├── Models/                        # QueueInfo, TopicInfo, BrowsedMessage, etc.
+    │   ├── MessagePanelToolbar.razor  # Shared toolbar (peek button, filter, load-more)
+    │   ├── PeekReadPanel.razor        # Peek / Receive message browser
+    │   ├── DlqPanel.razor             # Dead-letter queue browser with resubmit
+    │   ├── MessageList.razor          # Reusable message list with badges and slots
+    │   ├── MessageCard.razor          # Expandable single-message card
+    │   └── LoadMoreButton.razor       # Paginated load-more control
+    ├── Models/                        # QueueInfo, TopicInfo, SubscriptionInfo, BrowsedMessage, IQueueLikeEntity, etc.
     ├── Options/
     │   └── ServiceBusConnectionOptions.cs
     ├── Services/
-    │   ├── ServiceBusClientFactory.cs # Singleton client/admin client factory
+    │   ├── ServiceBusClientFactory.cs # Singleton client/admin client factory with runtime reset
     │   ├── ExplorerService.cs         # List entities + runtime properties
     │   ├── MessageSenderService.cs    # Send JSON messages
-    │   └── MessageBrowserService.cs   # Peek / Receive messages
+    │   ├── MessageBrowserService.cs   # Peek / Receive / DLQ peek and resubmit
+    │   ├── EntityManagementService.cs # Create and delete queues, topics, subscriptions
+    │   └── ConnectionSettingsStore.cs # Persist runtime connection settings to disk
     ├── Program.cs
     └── appsettings.json
 ```
@@ -170,11 +195,9 @@ src/
 ## Known Limits
 
 - **Azure Service Bus Emulator** — ✅ Supported when running under Aspire
-- **No Azure AD / Managed Identity** support yet — only connection-string auth (SAS)
 - **Peek is non-destructive** — uses `PeekMessages`; Receive uses PeekLock and abandons immediately
-- **No dead-letter browser** — to peek DLQ, set entity path to `<queue>/$DeadLetterQueue`
 - **No message filtering** — peek returns next N messages from the head of the queue/subscription
-- **No reconnect / retry UI** — restart the app if the connection string changes
+- **No reconnect / retry UI** — use the Settings page (`/settings`) to update the connection if it changes; the connection is reset automatically on save
 - **Sessions** — session-enabled queues/subscriptions are browsed via session receivers; multiple sessions are sampled up to the requested message count
 
 ---
