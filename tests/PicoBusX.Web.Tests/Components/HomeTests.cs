@@ -215,6 +215,39 @@ public class HomeTests : TestContext
         result.Should().BeFalse();
     }
 
+    [Fact]
+    public void CreateDialog_DefaultQueueType_ShowsAdvancedQueueOptions()
+    {
+        SetupServices();
+
+        var cut = RenderComponent<Home>();
+
+        cut.Markup.Should().Contain("Advanced Options");
+        cut.Markup.Should().Contain("Default Message TTL (hh:mm:ss)");
+        cut.Markup.Should().Contain("Max Delivery Count");
+        cut.Markup.Should().Contain("Requires Session");
+        cut.Markup.Should().Contain("Enable Partitioning");
+        cut.Markup.Should().Contain("Forward To");
+        cut.Markup.Should().Contain("Forward Dead-Lettered Messages To");
+    }
+
+    [Fact]
+    public void CreateDialog_TopicType_HidesQueueOnlyAdvancedOptions()
+    {
+        SetupServices();
+
+        var cut = RenderComponent<Home>();
+        SetPrivateField(cut.Instance, "_newEntityType", "topic");
+        cut.Render();
+
+        cut.Markup.Should().Contain("Default Message TTL (hh:mm:ss)");
+        cut.Markup.Should().Contain("Enable Partitioning");
+        cut.Markup.Should().NotContain("Max Delivery Count");
+        cut.Markup.Should().NotContain("Requires Session");
+        cut.Markup.Should().NotContain("Forward To");
+        cut.Markup.Should().NotContain("Forward Dead-Lettered Messages To");
+    }
+
     private static Task InvokePrivateMethod<TComponent>(TComponent instance, string methodName, params object[] args)
     {
         var result = InvokePrivateMethodCore<TComponent>(instance, methodName, args);
@@ -229,5 +262,12 @@ public class HomeTests : TestContext
         var method = typeof(TComponent).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException($"Method '{methodName}' not found on {typeof(TComponent).Name}.");
         return method.Invoke(instance, args);
+    }
+
+    private static void SetPrivateField<TComponent>(TComponent instance, string fieldName, object? value)
+    {
+        var field = typeof(TComponent).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on {typeof(TComponent).Name}.");
+        field.SetValue(instance, value);
     }
 }
