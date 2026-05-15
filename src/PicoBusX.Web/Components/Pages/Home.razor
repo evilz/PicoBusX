@@ -667,105 +667,76 @@
     private CreateQueueOptions BuildQueueOptions(string queueName)
     {
         var options = new CreateQueueOptions(queueName);
-        ApplyCommonCreateOptions(options);
-        ApplyPartitioning(options);
-
-        if (!string.IsNullOrWhiteSpace(_newMaxDeliveryCount) && int.TryParse(_newMaxDeliveryCount, out var maxDeliveryCount))
-        {
-            options.MaxDeliveryCount = maxDeliveryCount;
-        }
-
-        if (TryGetOptionalBool(_newRequiresSession, out var requiresSession))
-        {
-            options.RequiresSession = requiresSession;
-        }
-
-        if (!string.IsNullOrWhiteSpace(_newForwardTo))
-        {
-            options.ForwardTo = _newForwardTo.Trim();
-        }
-
-        if (!string.IsNullOrWhiteSpace(_newForwardDeadLetteredMessagesTo))
-        {
-            options.ForwardDeadLetteredMessagesTo = _newForwardDeadLetteredMessagesTo.Trim();
-        }
-
+        ApplyDefaultMessageTtlIfSpecified(ttl => options.DefaultMessageTimeToLive = ttl);
+        ApplyPartitioningIfSpecified(enable => options.EnablePartitioning = enable);
+        ApplyQueueLikeAdvancedOptions(
+            maxDeliveryCount => options.MaxDeliveryCount = maxDeliveryCount,
+            requiresSession => options.RequiresSession = requiresSession,
+            forwardTo => options.ForwardTo = forwardTo,
+            forwardDeadLetteredMessagesTo => options.ForwardDeadLetteredMessagesTo = forwardDeadLetteredMessagesTo);
         return options;
     }
 
     private CreateTopicOptions BuildTopicOptions(string topicName)
     {
         var options = new CreateTopicOptions(topicName);
-        ApplyCommonCreateOptions(options);
-        ApplyPartitioning(options);
+        ApplyDefaultMessageTtlIfSpecified(ttl => options.DefaultMessageTimeToLive = ttl);
+        ApplyPartitioningIfSpecified(enable => options.EnablePartitioning = enable);
         return options;
     }
 
     private CreateSubscriptionOptions BuildSubscriptionOptions(string topicName, string subscriptionName)
     {
         var options = new CreateSubscriptionOptions(topicName, subscriptionName);
-        ApplyCommonCreateOptions(options);
+        ApplyDefaultMessageTtlIfSpecified(ttl => options.DefaultMessageTimeToLive = ttl);
+        ApplyQueueLikeAdvancedOptions(
+            maxDeliveryCount => options.MaxDeliveryCount = maxDeliveryCount,
+            requiresSession => options.RequiresSession = requiresSession,
+            forwardTo => options.ForwardTo = forwardTo,
+            forwardDeadLetteredMessagesTo => options.ForwardDeadLetteredMessagesTo = forwardDeadLetteredMessagesTo);
+        return options;
+    }
 
+    private void ApplyQueueLikeAdvancedOptions(
+        Action<int> setMaxDeliveryCount,
+        Action<bool> setRequiresSession,
+        Action<string> setForwardTo,
+        Action<string> setForwardDeadLetteredMessagesTo)
+    {
         if (!string.IsNullOrWhiteSpace(_newMaxDeliveryCount) && int.TryParse(_newMaxDeliveryCount, out var maxDeliveryCount))
         {
-            options.MaxDeliveryCount = maxDeliveryCount;
+            setMaxDeliveryCount(maxDeliveryCount);
         }
 
         if (TryGetOptionalBool(_newRequiresSession, out var requiresSession))
         {
-            options.RequiresSession = requiresSession;
+            setRequiresSession(requiresSession);
         }
 
         if (!string.IsNullOrWhiteSpace(_newForwardTo))
         {
-            options.ForwardTo = _newForwardTo.Trim();
+            setForwardTo(_newForwardTo.Trim());
         }
 
         if (!string.IsNullOrWhiteSpace(_newForwardDeadLetteredMessagesTo))
         {
-            options.ForwardDeadLetteredMessagesTo = _newForwardDeadLetteredMessagesTo.Trim();
+            setForwardDeadLetteredMessagesTo(_newForwardDeadLetteredMessagesTo.Trim());
         }
-
-        return options;
     }
 
-    private void ApplyCommonCreateOptions(CreateQueueOptions options)
+    private void ApplyDefaultMessageTtlIfSpecified(Action<TimeSpan> setDefaultMessageTtl)
     {
         if (!string.IsNullOrWhiteSpace(_newDefaultMessageTtl) && TimeSpan.TryParse(_newDefaultMessageTtl, out var ttl))
         {
-            options.DefaultMessageTimeToLive = ttl;
+            setDefaultMessageTtl(ttl);
         }
     }
 
-    private void ApplyCommonCreateOptions(CreateTopicOptions options)
-    {
-        if (!string.IsNullOrWhiteSpace(_newDefaultMessageTtl) && TimeSpan.TryParse(_newDefaultMessageTtl, out var ttl))
-        {
-            options.DefaultMessageTimeToLive = ttl;
-        }
-    }
-
-    private void ApplyCommonCreateOptions(CreateSubscriptionOptions options)
-    {
-        if (!string.IsNullOrWhiteSpace(_newDefaultMessageTtl) && TimeSpan.TryParse(_newDefaultMessageTtl, out var ttl))
-        {
-            options.DefaultMessageTimeToLive = ttl;
-        }
-    }
-
-    private void ApplyPartitioning(CreateQueueOptions options)
+    private void ApplyPartitioningIfSpecified(Action<bool> setEnablePartitioning)
     {
         if (TryGetOptionalBool(_newEnablePartitioning, out var enablePartitioning))
         {
-            options.EnablePartitioning = enablePartitioning;
-        }
-    }
-
-    private void ApplyPartitioning(CreateTopicOptions options)
-    {
-        if (TryGetOptionalBool(_newEnablePartitioning, out var enablePartitioning))
-        {
-            options.EnablePartitioning = enablePartitioning;
+            setEnablePartitioning(enablePartitioning);
         }
     }
 
