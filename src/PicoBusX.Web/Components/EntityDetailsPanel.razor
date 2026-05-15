@@ -66,7 +66,7 @@
                             @if (topic.Subscriptions.Count == 0)
                             {
                                 <tr>
-                                    <td colspan="8">—</td>
+                                    <td colspan="@SubscriptionSummaryColumnCount">—</td>
                                 </tr>
                             }
                             else
@@ -161,6 +161,7 @@
     [Parameter] public List<QueueInfo> Queues { get; set; } = new();
     [Parameter] public List<TopicInfo> Topics { get; set; } = new();
 
+    private const int SubscriptionSummaryColumnCount = 8;
     private sealed record DetailRow(string Label, string Value);
 
     private static IReadOnlyList<DetailRow> BuildQueueRows(QueueInfo queue)

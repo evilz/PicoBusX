@@ -97,7 +97,7 @@
                 <FluentButton Appearance="Appearance.Outline"
                               IconStart="@(new Icons.Regular.Size16.Delete())"
                               OnClick="OpenDeleteDialog"
-                              Style="@(_selectedEntity.Type == BusEntityType.Subscription ? "color: #dc2626; border-color: #dc2626;" : "margin-left: auto; color: #dc2626; border-color: #dc2626;")"
+                              Style="@GetDeleteButtonStyle()"
                               Title="Delete this entity">
                     Delete
                 </FluentButton>
@@ -324,6 +324,8 @@
 </FluentDialog>
 
 @code {
+    private const int StandardOperationTimeoutSeconds = 30;
+
     private List<QueueInfo> _queues = new();
     private List<TopicInfo> _topics = new();
     [SupplyParameterFromQuery(Name = "name")]
@@ -430,7 +432,7 @@
 
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(StandardOperationTimeoutSeconds));
             var loadResult = await Explorer.LoadAsync(cts.Token);
 
             _queues = loadResult.Queues;
@@ -570,7 +572,7 @@
         StateHasChanged();
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(StandardOperationTimeoutSeconds));
             _browsedMessages = IsSessionEnabled()
                 ? await Browser.ReceiveAndAbandonSessionAsync(args.entityPath, args.maxCount, cts.Token)
                 : await Browser.ReceiveAndAbandonAsync(args.entityPath, args.maxCount, cts.Token);
@@ -617,7 +619,7 @@
         StateHasChanged();
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(StandardOperationTimeoutSeconds));
             var batch = await fetchFunc(cts.Token);
             onSuccess(batch);
         }
@@ -636,7 +638,7 @@
     {
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(StandardOperationTimeoutSeconds));
             await Browser.ResubmitDeadLetterAsync(_selectedEntity!.EntityPath, sequenceNumber, cts.Token);
             ToastService.ShowSuccess($"Message #{sequenceNumber} resubmitted successfully!");
             _dlqMessages = _dlqMessages.Where(m => m.SequenceNumber != sequenceNumber).ToList();
@@ -676,7 +678,7 @@
         _createEntityError = null;
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(StandardOperationTimeoutSeconds));
             switch (_newEntityType)
             {
                 case "queue":
@@ -719,7 +721,7 @@
         _deleteEntityError = null;
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(StandardOperationTimeoutSeconds));
             switch (_selectedEntity.Type)
             {
                 case BusEntityType.Queue:
@@ -762,15 +764,9 @@
 
     private async Task SubmitCreateRuleAsync()
     {
-        if (string.IsNullOrWhiteSpace(_newRuleName))
+        _manageRulesError = ValidateRuleInput();
+        if (_manageRulesError is not null)
         {
-            _manageRulesError = "Rule Name is required.";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(_newRuleFilterExpression))
-        {
-            _manageRulesError = "SQL Filter Expression is required.";
             return;
         }
 
@@ -786,7 +782,7 @@
 
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(StandardOperationTimeoutSeconds));
             await EntityManager.CreateSubscriptionRuleAsync(
                 _selectedEntity.TopicName,
                 selectedSubscription.Name,
@@ -826,7 +822,7 @@
 
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(StandardOperationTimeoutSeconds));
             await EntityManager.DeleteSubscriptionRuleAsync(
                 _selectedEntity.TopicName,
                 selectedSubscription.Name,
@@ -863,6 +859,21 @@
         }
     }
 
+    private string? ValidateRuleInput()
+    {
+        if (string.IsNullOrWhiteSpace(_newRuleName))
+        {
+            return "Rule Name is required.";
+        }
+
+        if (string.IsNullOrWhiteSpace(_newRuleFilterExpression))
+        {
+            return "SQL Filter Expression is required.";
+        }
+
+        return null;
+    }
+
     private void RestoreSelectionAfterReload()
     {
         if (_selectedEntity is null)
@@ -891,6 +902,14 @@
         BusEntityType.Subscription => "#065f46",
         _ => "#1e40af"
     };
+
+    private string GetDeleteButtonStyle()
+    {
+        const string baseStyle = "color: #dc2626; border-color: #dc2626;";
+        return _selectedEntity?.Type == BusEntityType.Subscription
+            ? baseStyle
+            : $"margin-left: auto; {baseStyle}";
+    }
 
     public void Dispose() { }
 }
