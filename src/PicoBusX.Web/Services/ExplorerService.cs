@@ -229,10 +229,10 @@ public class ExplorerService(
     {
         return filter switch
         {
-            SqlRuleFilter sqlRuleFilter => sqlRuleFilter.SqlExpression,
-            CorrelationRuleFilter correlationRuleFilter => FormatCorrelationFilter(correlationRuleFilter),
             TrueRuleFilter => "TrueFilter",
             FalseRuleFilter => "FalseFilter",
+            SqlRuleFilter sqlRuleFilter => sqlRuleFilter.SqlExpression,
+            CorrelationRuleFilter correlationRuleFilter => FormatCorrelationFilter(correlationRuleFilter),
             _ => filter.GetType().Name
         };
     }
