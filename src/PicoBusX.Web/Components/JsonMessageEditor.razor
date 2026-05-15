@@ -9,7 +9,14 @@
                          Style="width: 100%;" />
 
         <div style="width:100%">
-            <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">JSON Payload</FluentLabel>
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                <FluentLabel Weight="FontWeight.Bold">JSON Payload</FluentLabel>
+                <FluentStack Orientation="Orientation.Horizontal" Style="gap: 0.35rem;">
+                    <FluentButton Appearance="Appearance.Stealth" OnClick="HandleFormatJson" Disabled="IsSending">Format</FluentButton>
+                    <FluentButton Appearance="Appearance.Stealth" OnClick="HandleMinifyJson" Disabled="IsSending">Minify</FluentButton>
+                    <FluentButton Appearance="Appearance.Stealth" OnClick="ValidateJson" Disabled="IsSending">Validate</FluentButton>
+                </FluentStack>
+            </div>
             <div style="width:100%; border: 1px solid var(--neutral-stroke-rest); border-radius: 4px; overflow: hidden; @(_jsonError != null ? "border-color: #dc2626;" : "")">
                 <StandaloneCodeEditor @ref="_editor"
                                       Id="json-payload-editor"
@@ -141,17 +148,50 @@
     {
         if (_editor is not null)
             _jsonPayload = await _editor.GetValue();
-        try
+
+        _jsonValid = MonacoEditorOptions.TryValidateJson(_jsonPayload, out var error);
+        _jsonError = error;
+    }
+
+    private async Task HandleFormatJson()
+    {
+        if (_editor is not null)
+            _jsonPayload = await _editor.GetValue();
+
+        if (MonacoEditorOptions.TryFormatJson(_jsonPayload, out var formattedJson, out var error))
         {
-            System.Text.Json.JsonDocument.Parse(_jsonPayload);
+            await UpdatePayloadAndEditor(formattedJson);
             _jsonError = null;
             _jsonValid = true;
+            return;
         }
-        catch (System.Text.Json.JsonException ex)
+
+        _jsonError = error;
+        _jsonValid = false;
+    }
+
+    private async Task HandleMinifyJson()
+    {
+        if (_editor is not null)
+            _jsonPayload = await _editor.GetValue();
+
+        if (MonacoEditorOptions.TryMinifyJson(_jsonPayload, out var minifiedJson, out var error))
         {
-            _jsonError = ex.Message;
-            _jsonValid = false;
+            await UpdatePayloadAndEditor(minifiedJson);
+            _jsonError = null;
+            _jsonValid = true;
+            return;
         }
+
+        _jsonError = error;
+        _jsonValid = false;
+    }
+
+    private async Task UpdatePayloadAndEditor(string payload)
+    {
+        _jsonPayload = payload;
+        if (_editor is not null)
+            await _editor.SetValue(_jsonPayload);
     }
 
     private async Task HandleSend()

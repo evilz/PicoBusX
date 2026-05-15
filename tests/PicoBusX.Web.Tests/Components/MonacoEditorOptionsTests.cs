@@ -44,4 +44,56 @@ public class MonacoEditorOptionsTests
     {
         MonacoEditorOptions.IsJson(value).Should().BeFalse();
     }
+
+    [Fact]
+    public void TryValidateJson_ValidJson_ReturnsTrueWithNullError()
+    {
+        var isValid = MonacoEditorOptions.TryValidateJson("{\"name\":\"PicoBusX\"}", out var error);
+
+        isValid.Should().BeTrue();
+        error.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryValidateJson_InvalidJson_ReturnsFalseWithError()
+    {
+        var isValid = MonacoEditorOptions.TryValidateJson("{bad json", out var error);
+
+        isValid.Should().BeFalse();
+        error.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void TryFormatJson_ValidJson_ReturnsIndentedJson()
+    {
+        var result = MonacoEditorOptions.TryFormatJson("{\"name\":\"PicoBusX\",\"version\":10}", out var formattedJson, out var error);
+
+        result.Should().BeTrue();
+        error.Should().BeNull();
+        formattedJson.Should().Be("{\n  \"name\": \"PicoBusX\",\n  \"version\": 10\n}");
+    }
+
+    [Fact]
+    public void TryFormatJson_InvalidJson_ReturnsFalseAndOriginalValue()
+    {
+        var source = "{bad json";
+
+        var result = MonacoEditorOptions.TryFormatJson(source, out var formattedJson, out var error);
+
+        result.Should().BeFalse();
+        error.Should().NotBeNullOrWhiteSpace();
+        formattedJson.Should().Be(source);
+    }
+
+    [Fact]
+    public void TryMinifyJson_ValidJson_ReturnsMinifiedJson()
+    {
+        const string source = "{\n  \"name\": \"PicoBusX\",\n  \"version\": 10,\n  \"features\": [\"format\", \"minify\"]\n}";
+
+        var result = MonacoEditorOptions.TryMinifyJson(source, out var minifiedJson, out var error);
+
+        result.Should().BeTrue();
+        error.Should().BeNull();
+        minifiedJson.Should().Be("{\"name\":\"PicoBusX\",\"version\":10,\"features\":[\"format\",\"minify\"]}");
+    }
 }
