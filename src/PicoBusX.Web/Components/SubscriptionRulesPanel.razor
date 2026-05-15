@@ -103,8 +103,10 @@ else
 }
 
 @code {
+    public record CreateRuleRequest(string Name, string FilterType, string? SqlExpression, string? ActionExpression);
+
     [Parameter] public List<RuleInfo> Rules { get; set; } = [];
-    [Parameter] public EventCallback<(string name, string filterType, string? sqlExpression, string? actionExpression)> OnCreateRule { get; set; }
+    [Parameter] public EventCallback<CreateRuleRequest> OnCreateRule { get; set; }
     [Parameter] public EventCallback<string> OnDeleteRule { get; set; }
 
     private bool _showAddForm;
@@ -144,7 +146,7 @@ else
         _addError = null;
         try
         {
-            await OnCreateRule.InvokeAsync((_newRuleName.Trim(), _newFilterType, _newSqlExpression?.Trim(), _newActionExpression?.Trim()));
+            await OnCreateRule.InvokeAsync(new CreateRuleRequest(_newRuleName.Trim(), _newFilterType, _newSqlExpression?.Trim(), _newActionExpression?.Trim()));
             _showAddForm = false;
             _newRuleName = string.Empty;
             _newFilterType = "sql";

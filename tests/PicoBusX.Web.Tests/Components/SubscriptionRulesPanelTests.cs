@@ -135,11 +135,11 @@ public class SubscriptionRulesPanelTests : TestContext
     [Fact]
     public async Task HandleCreateAsync_ValidSqlRule_InvokesOnCreateRule()
     {
-        (string name, string filterType, string? sqlExpression, string? actionExpression)? received = null;
+        SubscriptionRulesPanel.CreateRuleRequest? received = null;
 
         var cut = RenderComponent<SubscriptionRulesPanel>(parameters => parameters
             .Add(p => p.Rules, [])
-            .Add(p => p.OnCreateRule, EventCallback.Factory.Create<(string, string, string?, string?)>(
+            .Add(p => p.OnCreateRule, EventCallback.Factory.Create<SubscriptionRulesPanel.CreateRuleRequest>(
                 this, args => received = args)));
 
         cut.Instance.GetType()
@@ -160,9 +160,9 @@ public class SubscriptionRulesPanelTests : TestContext
         });
 
         received.Should().NotBeNull();
-        received!.Value.name.Should().Be("my-rule");
-        received!.Value.filterType.Should().Be("sql");
-        received!.Value.sqlExpression.Should().Be("sys.Label = 'order'");
+        received!.Name.Should().Be("my-rule");
+        received!.FilterType.Should().Be("sql");
+        received!.SqlExpression.Should().Be("sys.Label = 'order'");
     }
 
     [Fact]

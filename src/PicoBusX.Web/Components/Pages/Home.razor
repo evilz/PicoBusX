@@ -554,23 +554,24 @@
             ?.Rules ?? [];
     }
 
-    private async Task HandleCreateRuleAsync((string name, string filterType, string? sqlExpression, string? actionExpression) args)
+    private async Task HandleCreateRuleAsync(SubscriptionRulesPanel.CreateRuleRequest request)
     {
         if (_selectedEntity is null) return;
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            RuleFilter filter = args.filterType switch
+            RuleFilter filter = request.FilterType switch
             {
                 "true" => new TrueRuleFilter(),
                 "false" => new FalseRuleFilter(),
-                _ => new SqlRuleFilter(args.sqlExpression!)
+                "sql" => new SqlRuleFilter(request.SqlExpression!),
+                _ => throw new ArgumentException($"Unknown filter type: {request.FilterType}")
             };
-            SqlRuleAction? action = string.IsNullOrWhiteSpace(args.actionExpression)
+            SqlRuleAction? action = string.IsNullOrWhiteSpace(request.ActionExpression)
                 ? null
-                : new SqlRuleAction(args.actionExpression);
-            await EntityManager.CreateRuleAsync(_selectedEntity.TopicName!, _selectedEntity.Name, args.name, filter, action, cts.Token);
-            ToastService.ShowSuccess($"Rule '{args.name}' created successfully!");
+                : new SqlRuleAction(request.ActionExpression);
+            await EntityManager.CreateRuleAsync(_selectedEntity.TopicName!, _selectedEntity.Name, request.Name, filter, action, cts.Token);
+            ToastService.ShowSuccess($"Rule '{request.Name}' created successfully!");
             await LoadDataAsync();
         }
         catch (Exception ex)
