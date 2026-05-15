@@ -179,7 +179,8 @@ public class ExplorerService(
                     DeadLetteringOnFilterEvaluationExceptions = subscription.EnableDeadLetteringOnFilterEvaluationExceptions,
                     ForwardTo = NormalizeText(subscription.ForwardTo),
                     ForwardDeadLetteredMessagesTo = NormalizeText(subscription.ForwardDeadLetteredMessagesTo),
-                    Status = subscription.Status.ToString()
+                    Status = subscription.Status.ToString(),
+                    Rules = await GetSubscriptionRulesAsync(admin, topicName, subscription.SubscriptionName, ct)
                 });
             }
         }
@@ -203,6 +204,89 @@ public class ExplorerService(
                 "Failed to get runtime properties for subscription {SubscriptionName} on topic {TopicName}",
                 subscriptionName,
                 topicName));
+
+    private async Task<List<SubscriptionRuleInfo>> GetSubscriptionRulesAsync(
+        ServiceBusAdministrationClient admin,
+        string topicName,
+        string subscriptionName,
+        CancellationToken ct)
+    {
+        var rules = new List<SubscriptionRuleInfo>();
+
+        try
+        {
+            await foreach (var rule in admin.GetRulesAsync(topicName, subscriptionName, ct))
+            {
+                rules.Add(new SubscriptionRuleInfo
+                {
+                    Name = rule.Name,
+                    FilterType = GetRuleFilterType(rule.Filter),
+                    FilterExpression = GetRuleFilterExpression(rule.Filter)
+                });
+            }
+        }
+        catch (Exception ex) when (!TryBuildUserFacingError(ex, out _))
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to get rules for subscription {SubscriptionName} on topic {TopicName}",
+                subscriptionName,
+                topicName);
+        }
+
+        return rules;
+    }
+
+    private static string GetRuleFilterType(RuleFilter filter) =>
+        filter switch
+        {
+            TrueRuleFilter => "True",
+            FalseRuleFilter => "False",
+            CorrelationRuleFilter => "Correlation",
+            SqlRuleFilter => "SQL",
+            _ => filter.GetType().Name
+        };
+
+    private static string GetRuleFilterExpression(RuleFilter filter) =>
+        filter switch
+        {
+            TrueRuleFilter => "True",
+            FalseRuleFilter => "False",
+            CorrelationRuleFilter correlation => BuildCorrelationFilterSummary(correlation),
+            SqlRuleFilter sql => sql.SqlExpression,
+            _ => "—"
+        };
+
+    private static string BuildCorrelationFilterSummary(CorrelationRuleFilter filter)
+    {
+        var parts = new List<string>();
+
+        AppendIfPresent(parts, nameof(filter.CorrelationId), filter.CorrelationId);
+        AppendIfPresent(parts, nameof(filter.MessageId), filter.MessageId);
+        AppendIfPresent(parts, nameof(filter.To), filter.To);
+        AppendIfPresent(parts, nameof(filter.ReplyTo), filter.ReplyTo);
+        AppendIfPresent(parts, nameof(filter.Subject), filter.Subject);
+        AppendIfPresent(parts, nameof(filter.SessionId), filter.SessionId);
+        AppendIfPresent(parts, nameof(filter.ReplyToSessionId), filter.ReplyToSessionId);
+        AppendIfPresent(parts, nameof(filter.ContentType), filter.ContentType);
+
+        foreach (var property in filter.ApplicationProperties)
+        {
+            AppendIfPresent(parts, $"Property:{property.Key}", property.Value?.ToString());
+        }
+
+        return parts.Count == 0 ? "Correlation filter without explicit values" : string.Join("; ", parts);
+    }
+
+    private static void AppendIfPresent(ICollection<string> parts, string key, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        parts.Add($"{key}={value}");
+    }
 
     private static DateTimeOffset? NormalizeTimestamp(DateTimeOffset? value)
     {
