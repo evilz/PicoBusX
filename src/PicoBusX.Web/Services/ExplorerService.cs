@@ -179,7 +179,8 @@ public class ExplorerService(
                     DeadLetteringOnFilterEvaluationExceptions = subscription.EnableDeadLetteringOnFilterEvaluationExceptions,
                     ForwardTo = NormalizeText(subscription.ForwardTo),
                     ForwardDeadLetteredMessagesTo = NormalizeText(subscription.ForwardDeadLetteredMessagesTo),
-                    Status = subscription.Status.ToString()
+                    Status = subscription.Status.ToString(),
+                    Rules = await GetSubscriptionRulesAsync(admin, topicName, subscription.SubscriptionName, ct)
                 });
             }
         }
@@ -189,6 +190,89 @@ public class ExplorerService(
         }
 
         return subscriptions;
+    }
+
+    private async Task<List<SubscriptionRuleInfo>> GetSubscriptionRulesAsync(
+        ServiceBusAdministrationClient admin,
+        string topicName,
+        string subscriptionName,
+        CancellationToken ct)
+    {
+        var rules = new List<SubscriptionRuleInfo>();
+
+        try
+        {
+            await foreach (var rule in admin.GetRulesAsync(topicName, subscriptionName, ct))
+            {
+                rules.Add(new SubscriptionRuleInfo
+                {
+                    Name = rule.Name,
+                    FilterType = rule.Filter.GetType().Name,
+                    FilterExpression = FormatFilterExpression(rule.Filter),
+                    ActionExpression = FormatRuleAction(rule.Action)
+                });
+            }
+        }
+        catch (Exception ex) when (!TryBuildUserFacingError(ex, out _))
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to get rules for subscription {SubscriptionName} on topic {TopicName}",
+                subscriptionName,
+                topicName);
+        }
+
+        return rules;
+    }
+
+    private static string FormatFilterExpression(RuleFilter filter)
+    {
+        return filter switch
+        {
+            SqlRuleFilter sqlRuleFilter => sqlRuleFilter.SqlExpression,
+            CorrelationRuleFilter correlationRuleFilter => FormatCorrelationFilter(correlationRuleFilter),
+            TrueRuleFilter => "TrueFilter",
+            FalseRuleFilter => "FalseFilter",
+            _ => filter.GetType().Name
+        };
+    }
+
+    private static string FormatCorrelationFilter(CorrelationRuleFilter correlationFilter)
+    {
+        var pairs = new List<string>();
+
+        AddFilterPair(correlationFilter.Subject, "Subject");
+        AddFilterPair(correlationFilter.CorrelationId, "CorrelationId");
+        AddFilterPair(correlationFilter.MessageId, "MessageId");
+        AddFilterPair(correlationFilter.ReplyTo, "ReplyTo");
+        AddFilterPair(correlationFilter.ReplyToSessionId, "ReplyToSessionId");
+        AddFilterPair(correlationFilter.SessionId, "SessionId");
+        AddFilterPair(correlationFilter.To, "To");
+        AddFilterPair(correlationFilter.ContentType, "ContentType");
+
+        foreach (var property in correlationFilter.ApplicationProperties)
+        {
+            pairs.Add($"{property.Key}={property.Value}");
+        }
+
+        return pairs.Count == 0 ? "CorrelationFilter (no conditions)" : string.Join("; ", pairs);
+
+        void AddFilterPair(string? value, string key)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                pairs.Add($"{key}={value}");
+            }
+        }
+    }
+
+    private static string? FormatRuleAction(RuleAction action)
+    {
+        return action switch
+        {
+            SqlRuleAction sqlRuleAction => NormalizeText(sqlRuleAction.SqlExpression),
+            _ => NormalizeText(action.GetType().Name)
+        };
     }
 
     private Task<SubscriptionRuntimeProperties?> TryGetSubscriptionRuntimePropertiesAsync(

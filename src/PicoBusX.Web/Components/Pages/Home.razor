@@ -85,10 +85,19 @@
                 {
                     <span class="entity-parent">under @_selectedEntity.TopicName</span>
                 }
+                @if (_selectedEntity.Type == BusEntityType.Subscription)
+                {
+                    <FluentButton Appearance="Appearance.Outline"
+                                  IconStart="@(new Icons.Regular.Size16.Filter())"
+                                  OnClick="OpenManageRulesDialog"
+                                  Style="margin-left: auto;">
+                        Manage Rules
+                    </FluentButton>
+                }
                 <FluentButton Appearance="Appearance.Outline"
                               IconStart="@(new Icons.Regular.Size16.Delete())"
                               OnClick="OpenDeleteDialog"
-                              Style="margin-left: auto; color: #dc2626; border-color: #dc2626;"
+                              Style="@(_selectedEntity.Type == BusEntityType.Subscription ? "color: #dc2626; border-color: #dc2626;" : "margin-left: auto; color: #dc2626; border-color: #dc2626;")"
                               Title="Delete this entity">
                     Delete
                 </FluentButton>
@@ -228,6 +237,92 @@
     </FluentDialogFooter>
 </FluentDialog>
 
+<!-- Manage Subscription Rules Dialog -->
+<FluentDialog @ref="_manageRulesDialog"
+              Hidden="@_manageRulesDialogHidden"
+              Modal="true"
+              TrapFocus="true"
+              PreventScroll="true"
+              @ondialogdismiss="CloseManageRulesDialog">
+    <FluentDialogHeader ShowDismiss="true">
+        <strong>Manage Subscription Rules</strong>
+    </FluentDialogHeader>
+    <FluentDialogBody>
+        <FluentStack Orientation="Orientation.Vertical" Style="gap: 0.75rem; padding: 0.5rem 0; min-width: 540px;">
+            <FluentLabel Weight="FontWeight.Bold">Existing rules</FluentLabel>
+            <FluentCard Style="padding: 0; overflow: hidden;">
+                <table class="details-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Filter Type</th>
+                            <th>Filter</th>
+                            <th>Action</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_ruleEntries.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="5">—</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var rule in _ruleEntries)
+                            {
+                                <tr>
+                                    <td>@rule.Name</td>
+                                    <td>@rule.FilterType</td>
+                                    <td>@rule.FilterExpression</td>
+                                    <td>@(string.IsNullOrWhiteSpace(rule.ActionExpression) ? "—" : rule.ActionExpression)</td>
+                                    <td>
+                                        <FluentButton Appearance="Appearance.Stealth"
+                                                      OnClick="() => SubmitDeleteRuleAsync(rule.Name)"
+                                                      Disabled="@_managingRules"
+                                                      Title="Delete rule"
+                                                      Style="color: #dc2626;">
+                                            Delete
+                                        </FluentButton>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </FluentCard>
+
+            <FluentLabel Weight="FontWeight.Bold" Style="margin-top: 0.5rem;">Create rule</FluentLabel>
+            <FluentTextField Label="Rule Name"
+                             @bind-Value="_newRuleName"
+                             Placeholder="my-rule"
+                             Style="width: 100%;" />
+            <FluentTextField Label="SQL Filter Expression"
+                             @bind-Value="_newRuleFilterExpression"
+                             Placeholder="sys.Label = 'created'"
+                             Style="width: 100%;" />
+            <FluentTextField Label="SQL Action (optional)"
+                             @bind-Value="_newRuleActionExpression"
+                             Placeholder="SET Priority = 'High'"
+                             Style="width: 100%;" />
+
+            @if (!string.IsNullOrWhiteSpace(_manageRulesError))
+            {
+                <FluentMessageBar Intent="MessageIntent.Error">@_manageRulesError</FluentMessageBar>
+            }
+        </FluentStack>
+    </FluentDialogBody>
+    <FluentDialogFooter>
+        <FluentButton Appearance="Appearance.Accent"
+                      OnClick="SubmitCreateRuleAsync"
+                      Disabled="@_managingRules">
+            @if (_managingRules) { <span>Saving…</span> } else { <span>Create Rule</span> }
+        </FluentButton>
+        <FluentButton Appearance="Appearance.Outline" OnClick="CloseManageRulesDialog">Close</FluentButton>
+    </FluentDialogFooter>
+</FluentDialog>
+
 @code {
     private List<QueueInfo> _queues = new();
     private List<TopicInfo> _topics = new();
@@ -309,6 +404,16 @@
     private bool _deleteDialogHidden = true;
     private bool _deletingEntity;
     private string? _deleteEntityError;
+
+    // Rule management dialog state
+    private FluentDialog? _manageRulesDialog;
+    private bool _manageRulesDialogHidden = true;
+    private List<SubscriptionRuleInfo> _ruleEntries = new();
+    private string _newRuleName = string.Empty;
+    private string _newRuleFilterExpression = string.Empty;
+    private string? _newRuleActionExpression;
+    private bool _managingRules;
+    private string? _manageRulesError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -420,12 +525,21 @@
     private bool IsSessionEnabled() => _selectedEntity?.Type switch
     {
         BusEntityType.Queue => _queues.FirstOrDefault(q => q.Name == _selectedEntity.Name)?.RequiresSession ?? false,
-        BusEntityType.Subscription => _topics
-            .FirstOrDefault(t => t.Name == _selectedEntity.TopicName)
-            ?.Subscriptions.FirstOrDefault(s => s.Name == _selectedEntity.Name)
-            ?.RequiresSession ?? false,
+        BusEntityType.Subscription => GetSelectedSubscription()?.RequiresSession ?? false,
         _ => false
     };
+
+    private SubscriptionInfo? GetSelectedSubscription()
+    {
+        if (_selectedEntity?.Type != BusEntityType.Subscription || string.IsNullOrWhiteSpace(_selectedEntity.TopicName))
+        {
+            return null;
+        }
+
+        return _topics
+            .FirstOrDefault(t => t.Name == _selectedEntity.TopicName)
+            ?.Subscriptions.FirstOrDefault(s => s.Name == _selectedEntity.Name);
+    }
 
     private async Task HandlePeekAsync((string entityPath, int maxCount, long? fromSequenceNumber) args)
     {
@@ -631,6 +745,121 @@
         finally
         {
             _deletingEntity = false;
+        }
+    }
+
+    private void OpenManageRulesDialog()
+    {
+        _manageRulesError = null;
+        _newRuleName = string.Empty;
+        _newRuleFilterExpression = string.Empty;
+        _newRuleActionExpression = null;
+        _ruleEntries = GetSelectedSubscription()?.Rules.ToList() ?? new List<SubscriptionRuleInfo>();
+        _manageRulesDialogHidden = false;
+    }
+
+    private void CloseManageRulesDialog() => _manageRulesDialogHidden = true;
+
+    private async Task SubmitCreateRuleAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newRuleName))
+        {
+            _manageRulesError = "Rule Name is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_newRuleFilterExpression))
+        {
+            _manageRulesError = "SQL Filter Expression is required.";
+            return;
+        }
+
+        var selectedSubscription = GetSelectedSubscription();
+        if (selectedSubscription is null || _selectedEntity?.TopicName is null)
+        {
+            _manageRulesError = "No subscription is selected.";
+            return;
+        }
+
+        _managingRules = true;
+        _manageRulesError = null;
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await EntityManager.CreateSubscriptionRuleAsync(
+                _selectedEntity.TopicName,
+                selectedSubscription.Name,
+                _newRuleName.Trim(),
+                _newRuleFilterExpression.Trim(),
+                string.IsNullOrWhiteSpace(_newRuleActionExpression) ? null : _newRuleActionExpression.Trim(),
+                cts.Token);
+
+            ToastService.ShowSuccess($"Rule '{_newRuleName}' created successfully.");
+            await ReloadRulesAsync();
+            _newRuleName = string.Empty;
+            _newRuleFilterExpression = string.Empty;
+            _newRuleActionExpression = null;
+        }
+        catch (Exception ex)
+        {
+            _manageRulesError = ex.Message;
+            Logger.LogError(ex, "Failed to create subscription rule");
+        }
+        finally
+        {
+            _managingRules = false;
+        }
+    }
+
+    private async Task SubmitDeleteRuleAsync(string ruleName)
+    {
+        var selectedSubscription = GetSelectedSubscription();
+        if (selectedSubscription is null || _selectedEntity?.TopicName is null)
+        {
+            _manageRulesError = "No subscription is selected.";
+            return;
+        }
+
+        _managingRules = true;
+        _manageRulesError = null;
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await EntityManager.DeleteSubscriptionRuleAsync(
+                _selectedEntity.TopicName,
+                selectedSubscription.Name,
+                ruleName,
+                cts.Token);
+
+            ToastService.ShowSuccess($"Rule '{ruleName}' deleted successfully.");
+            await ReloadRulesAsync();
+        }
+        catch (Exception ex)
+        {
+            _manageRulesError = ex.Message;
+            Logger.LogError(ex, "Failed to delete subscription rule");
+        }
+        finally
+        {
+            _managingRules = false;
+        }
+    }
+
+    private async Task ReloadRulesAsync()
+    {
+        var selectedTopicName = _selectedEntity?.TopicName;
+        var selectedSubscriptionName = _selectedEntity?.Name;
+
+        await LoadDataAsync();
+
+        if (!string.IsNullOrWhiteSpace(selectedTopicName) && !string.IsNullOrWhiteSpace(selectedSubscriptionName))
+        {
+            _ruleEntries = _topics
+                .FirstOrDefault(topic => topic.Name == selectedTopicName)
+                ?.Subscriptions.FirstOrDefault(subscription => subscription.Name == selectedSubscriptionName)
+                ?.Rules.ToList() ?? new List<SubscriptionRuleInfo>();
         }
     }
 

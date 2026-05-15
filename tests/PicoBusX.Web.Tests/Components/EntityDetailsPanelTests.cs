@@ -97,6 +97,7 @@ public class EntityDetailsPanelTests : TestContext
                     DeadLetterMessageCount = 1,
                     TransferMessageCount = 0,
                     TransferDeadLetterMessageCount = 0,
+                    Rules = [new SubscriptionRuleInfo { Name = "match-created", FilterType = "SqlRuleFilter", FilterExpression = "sys.Label = 'created'" }],
                     Status = "Active"
                 }
             ]
@@ -109,6 +110,8 @@ public class EntityDetailsPanelTests : TestContext
 
         cut.Markup.Should().Contain("Subscriptions summary");
         cut.Markup.Should().Contain("order-created");
+        cut.Markup.Should().Contain("Rules");
+        cut.Markup.Should().Contain("1");
         cut.Markup.Should().Contain("Active");
     }
 
@@ -135,6 +138,16 @@ public class EntityDetailsPanelTests : TestContext
             MaxDeliveryCount = 10,
             RequiresSession = false,
             EnableBatchedOperations = true,
+            Rules =
+            [
+                new SubscriptionRuleInfo
+                {
+                    Name = "by-priority",
+                    FilterType = "SqlRuleFilter",
+                    FilterExpression = "Priority = 'High'",
+                    ActionExpression = "SET Region = 'US'"
+                }
+            ],
             Status = "Active"
         };
 
@@ -159,6 +172,10 @@ public class EntityDetailsPanelTests : TestContext
         cut.Markup.Should().Contain("Active Messages");
         cut.Markup.Should().Contain("Dead-Letter Messages");
         cut.Markup.Should().Contain("Max Delivery Count");
+        cut.Markup.Should().Contain("Subscription rules");
+        cut.Markup.Should().Contain("by-priority");
+        cut.Markup.Should().Contain("Priority = 'High'");
+        cut.Markup.Should().Contain("SET Region = 'US'");
         cut.Markup.Should().Contain("Active");
     }
 
@@ -189,4 +206,3 @@ public class EntityDetailsPanelTests : TestContext
         cut.Markup.Trim().Should().BeEmpty();
     }
 }
-

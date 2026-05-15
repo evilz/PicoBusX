@@ -36,6 +36,53 @@ public class EntityManagementService(
             admin => admin.DeleteSubscriptionAsync(topicName, subscriptionName, ct),
             () => logger.LogInformation("Deleted subscription {SubscriptionName} on topic {TopicName}", subscriptionName, topicName));
 
+    public Task CreateSubscriptionRuleAsync(
+        string topicName,
+        string subscriptionName,
+        string ruleName,
+        string filterExpression,
+        string? actionExpression,
+        CancellationToken ct = default) =>
+        ExecuteAdminOperationAsync(
+            admin => admin.CreateRuleAsync(
+                topicName,
+                subscriptionName,
+                BuildCreateRuleOptions(ruleName, filterExpression, actionExpression),
+                ct),
+            () => logger.LogInformation(
+                "Created rule {RuleName} on subscription {SubscriptionName} for topic {TopicName}",
+                ruleName,
+                subscriptionName,
+                topicName));
+
+    public Task DeleteSubscriptionRuleAsync(
+        string topicName,
+        string subscriptionName,
+        string ruleName,
+        CancellationToken ct = default) =>
+        ExecuteAdminOperationAsync(
+            admin => admin.DeleteRuleAsync(topicName, subscriptionName, ruleName, ct),
+            () => logger.LogInformation(
+                "Deleted rule {RuleName} on subscription {SubscriptionName} for topic {TopicName}",
+                ruleName,
+                subscriptionName,
+                topicName));
+
+    private static CreateRuleOptions BuildCreateRuleOptions(
+        string ruleName,
+        string filterExpression,
+        string? actionExpression)
+    {
+        var options = new CreateRuleOptions(ruleName, new SqlRuleFilter(filterExpression));
+
+        if (!string.IsNullOrWhiteSpace(actionExpression))
+        {
+            options.Action = new SqlRuleAction(actionExpression);
+        }
+
+        return options;
+    }
+
     private async Task ExecuteAdminOperationAsync(
         Func<ServiceBusAdministrationClient, Task> operation,
         Action logSuccess)

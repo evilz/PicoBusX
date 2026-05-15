@@ -57,6 +57,7 @@
                                 <th>DLQ</th>
                                 <th>Transfer</th>
                                 <th>Transfer DLQ</th>
+                                <th>Rules</th>
                                 <th>Sessions</th>
                                 <th>Status</th>
                             </tr>
@@ -65,7 +66,7 @@
                             @if (topic.Subscriptions.Count == 0)
                             {
                                 <tr>
-                                    <td colspan="7">—</td>
+                                    <td colspan="8">—</td>
                                 </tr>
                             }
                             else
@@ -78,6 +79,7 @@
                                         <td>@subscription.DeadLetterMessageCount</td>
                                         <td>@subscription.TransferMessageCount</td>
                                         <td>@subscription.TransferDeadLetterMessageCount</td>
+                                        <td>@subscription.Rules.Count</td>
                                         <td>@EntityDisplayFormatter.FormatBoolean(subscription.RequiresSession)</td>
                                         <td>@EntityDisplayFormatter.FormatText(subscription.Status)</td>
                                     </tr>
@@ -107,6 +109,40 @@
                                     <th>@row.Label</th>
                                     <td>@row.Value</td>
                                 </tr>
+                            }
+                        </tbody>
+                    </table>
+                </FluentCard>
+
+                <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin: 1rem 0 0.5rem;">Subscription rules</FluentLabel>
+                <FluentCard Style="padding: 0; overflow: hidden;">
+                    <table class="details-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Filter Type</th>
+                                <th>Filter</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (subscription.Rules.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="4">—</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var rule in subscription.Rules)
+                                {
+                                    <tr>
+                                        <td>@rule.Name</td>
+                                        <td>@rule.FilterType</td>
+                                        <td>@EntityDisplayFormatter.FormatText(rule.FilterExpression)</td>
+                                        <td>@EntityDisplayFormatter.FormatText(rule.ActionExpression)</td>
+                                    </tr>
+                                }
                             }
                         </tbody>
                     </table>
