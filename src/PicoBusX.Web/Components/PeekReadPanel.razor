@@ -90,13 +90,13 @@
     [Parameter] public EventCallback<(string, int)> OnReceive { get; set; }
     [Parameter] public EventCallback<(string lockToken, MessageSettlementAction action)> OnSettle { get; set; }
 
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _settlingLocks = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> _settlingLocks = new();
 
     private async Task DoReceive() => await OnReceive.InvokeAsync((EntityPath, _maxCount));
 
     private async Task DoSettle(string lockToken, MessageSettlementAction action)
     {
-        _settlingLocks.TryAdd(lockToken, 0);
+        _settlingLocks.TryAdd(lockToken, true);
         StateHasChanged();
         try
         {

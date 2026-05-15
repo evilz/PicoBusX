@@ -11,10 +11,10 @@ public enum MessageSettlementAction
     DeadLetter
 }
 
-public class MessageBrowserService
+public class MessageBrowserService : IAsyncDisposable
 {
     private const int SessionAcceptTimeoutSeconds = 3;
-    private const int SessionReceiveWaitSeconds = 5;
+    private const int ReceiveWaitSeconds = 5;
     private const string ManualDeadLetterReason = "ManualDeadLetter";
     private const string ManualDeadLetterDescription = "Moved to DLQ from PicoBusX message browser.";
 
@@ -53,7 +53,7 @@ public class MessageBrowserService
 
         try
         {
-            var messages = await receiver.ReceiveMessagesAsync(maxCount, maxWaitTime: TimeSpan.FromSeconds(SessionReceiveWaitSeconds), cancellationToken: ct);
+            var messages = await receiver.ReceiveMessagesAsync(maxCount, maxWaitTime: TimeSpan.FromSeconds(ReceiveWaitSeconds), cancellationToken: ct);
             if (messages.Count == 0)
             {
                 await receiver.DisposeAsync();
@@ -117,7 +117,7 @@ public class MessageBrowserService
             }
 
             var remaining = maxCount - results.Count;
-            var messages = await sessionReceiver.ReceiveMessagesAsync(remaining, maxWaitTime: TimeSpan.FromSeconds(SessionReceiveWaitSeconds), cancellationToken: ct);
+            var messages = await sessionReceiver.ReceiveMessagesAsync(remaining, maxWaitTime: TimeSpan.FromSeconds(ReceiveWaitSeconds), cancellationToken: ct);
             if (messages.Count == 0)
             {
                 await sessionReceiver.DisposeAsync();
@@ -179,7 +179,7 @@ public class MessageBrowserService
         }
         catch (ServiceBusException ex) when (ex.Reason is ServiceBusFailureReason.MessageLockLost or ServiceBusFailureReason.SessionLockLost)
         {
-            _logger.LogInformation(ex, "Message lock expired before settlement for token {LockToken}", lockToken);
+            _logger.LogWarning(ex, "Message lock expired before settlement for token {LockToken}", lockToken);
             removeTrackedMessage = true;
             return false;
         }
@@ -455,5 +455,30 @@ public class MessageBrowserService
             DeadLetterReason = m.DeadLetterReason,
             DeadLetterErrorDescription = m.DeadLetterErrorDescription
         };
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        List<ServiceBusReceiver> receivers;
+
+        await _stateLock.WaitAsync();
+        try
+        {
+            receivers = _receiversByEntity.Values.SelectMany(v => v).Distinct().ToList();
+            _lockedMessages.Clear();
+            _receiversByEntity.Clear();
+            _receiverMessageCounts.Clear();
+        }
+        finally
+        {
+            _stateLock.Release();
+        }
+
+        foreach (var receiver in receivers)
+        {
+            await receiver.DisposeAsync();
+        }
+
+        _stateLock.Dispose();
     }
 }
