@@ -114,6 +114,7 @@
                             DefaultMaxCount="@BusOptions.Value.EntityMaxPeek"
                             OnPeek="HandlePeekAsync"
                             OnReceive="HandleReceiveAsync"
+                            OnSettle="HandleSettleAsync"
                             Messages="@_browsedMessages"
                             IsBusy="@_browsing"
                             HasMore="@_hasMoreMessages"
@@ -270,8 +271,9 @@
 
         if (selectionChanged)
         {
+            var previousEntityPath = _selectedEntity?.EntityPath;
             _selectedEntity = newEntity;
-            ResetEntityScopedState();
+            ResetEntityScopedState(previousEntityPath);
         }
     }
     private string _activeTab = "details";
@@ -364,6 +366,7 @@
 
     private void HandleEntitySelected(BusEntity entity)
     {
+        var previousEntityPath = _selectedEntity?.EntityPath;
         _selectedEntity = entity;
         NavigationManager.NavigateTo(NavigationManager.GetUriWithQueryParameters("/", new Dictionary<string, object?>
         {
@@ -371,11 +374,21 @@
             { "type", entity.Type.ToString() },
             { "topicName", entity.TopicName }
         }));
-        ResetEntityScopedState();
+        ResetEntityScopedState(previousEntityPath);
     }
 
-    private void ResetEntityScopedState()
+    private void ResetEntityScopedState(string? previousEntityPath = null)
     {
+        if (!string.IsNullOrWhiteSpace(previousEntityPath))
+        {
+            _ = Browser.ResetPendingMessagesAsync(previousEntityPath);
+        }
+
+        if (_selectedEntity is not null)
+        {
+            _ = Browser.ResetPendingMessagesAsync(_selectedEntity.EntityPath);
+        }
+
         _activeTab = "details";
         _browsedMessages = new();
         _hasMoreMessages = false;
@@ -458,8 +471,8 @@
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             _browsedMessages = IsSessionEnabled()
-                ? await Browser.ReceiveAndAbandonSessionAsync(args.entityPath, args.maxCount, cts.Token)
-                : await Browser.ReceiveAndAbandonAsync(args.entityPath, args.maxCount, cts.Token);
+                ? await Browser.ReceiveSessionWithLockAsync(args.entityPath, args.maxCount, cts.Token)
+                : await Browser.ReceiveWithLockAsync(args.entityPath, args.maxCount, cts.Token);
         }
         catch (Exception ex)
         {
@@ -469,6 +482,29 @@
         finally
         {
             _browsing = false;
+        }
+    }
+
+    private async Task HandleSettleAsync((string lockToken, MessageSettlementAction action) args)
+    {
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var settled = await Browser.SettleReceivedMessageAsync(args.lockToken, args.action, cts.Token);
+            if (!settled)
+            {
+                ToastService.ShowInfo("Message lock expired or is no longer available.");
+                _browsedMessages = _browsedMessages.Where(m => m.LockToken != args.lockToken).ToList();
+                return;
+            }
+
+            _browsedMessages = _browsedMessages.Where(m => m.LockToken != args.lockToken).ToList();
+            ToastService.ShowSuccess($"{args.action} completed.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Settlement failed: {ex.Message}");
+            Logger.LogError(ex, "Failed to settle message with action {Action}", args.action);
         }
     }
 

@@ -1,4 +1,5 @@
 @using PicoBusX.Web.Models
+@using PicoBusX.Web.Services
 @inherits MessagePanelBase
 
 <div class="peek-panel">
@@ -48,9 +49,38 @@
                 <span><strong>Enqueued:</strong> @msg.EnqueuedTime.ToString("yyyy-MM-dd HH:mm:ss zzz")</span>
             </FluentStack>
         </MetadataContent>
+        <AdditionalCardContent Context="msg">
+            @if (!string.IsNullOrWhiteSpace(msg.LockToken))
+            {
+                var lockToken = msg.LockToken!;
+                var settling = _settlingLocks.Contains(lockToken);
+                <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="6">
+                    <FluentButton Appearance="Appearance.Accent"
+                                  Disabled="@settling"
+                                  OnClick="() => DoSettle(lockToken, MessageSettlementAction.Complete)">
+                        Complete
+                    </FluentButton>
+                    <FluentButton Appearance="Appearance.Outline"
+                                  Disabled="@settling"
+                                  OnClick="() => DoSettle(lockToken, MessageSettlementAction.Abandon)">
+                        Abandon
+                    </FluentButton>
+                    <FluentButton Appearance="Appearance.Outline"
+                                  Disabled="@settling"
+                                  OnClick="() => DoSettle(lockToken, MessageSettlementAction.Defer)">
+                        Defer
+                    </FluentButton>
+                    <FluentButton Appearance="Appearance.Lightweight"
+                                  Disabled="@settling"
+                                  OnClick="() => DoSettle(lockToken, MessageSettlementAction.DeadLetter)">
+                        Dead-letter
+                    </FluentButton>
+                </FluentStack>
+            }
+        </AdditionalCardContent>
         <EmptyContent>
             <FluentCard Style="text-align: center; padding: 2rem; color: var(--neutral-foreground-hint);">
-                Use Peek to preview messages (non-destructive) or Receive to consume them.
+                Use Peek to preview messages (non-destructive) or Receive to lock messages and settle them individually.
             </FluentCard>
         </EmptyContent>
     </MessageList>
@@ -58,6 +88,23 @@
 
 @code {
     [Parameter] public EventCallback<(string, int)> OnReceive { get; set; }
+    [Parameter] public EventCallback<(string lockToken, MessageSettlementAction action)> OnSettle { get; set; }
+
+    private readonly HashSet<string> _settlingLocks = [];
 
     private async Task DoReceive() => await OnReceive.InvokeAsync((EntityPath, _maxCount));
+
+    private async Task DoSettle(string lockToken, MessageSettlementAction action)
+    {
+        _settlingLocks.Add(lockToken);
+        StateHasChanged();
+        try
+        {
+            await OnSettle.InvokeAsync((lockToken, action));
+        }
+        finally
+        {
+            _settlingLocks.Remove(lockToken);
+        }
+    }
 }
