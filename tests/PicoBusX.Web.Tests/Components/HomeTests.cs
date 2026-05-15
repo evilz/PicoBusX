@@ -216,7 +216,7 @@ public class HomeTests : TestContext
     }
 
     [Fact]
-    public void CreateDialog_DefaultQueueType_ShowsAdvancedQueueOptions()
+    public void Home_WhenCreateDialogUsesDefaultQueueType_ShowsAdvancedQueueOptions()
     {
         SetupServices();
 
@@ -232,7 +232,7 @@ public class HomeTests : TestContext
     }
 
     [Fact]
-    public void CreateDialog_TopicType_HidesQueueOnlyAdvancedOptions()
+    public void Home_WhenCreateDialogEntityTypeIsTopic_HidesQueueOnlyAdvancedOptions()
     {
         SetupServices();
 

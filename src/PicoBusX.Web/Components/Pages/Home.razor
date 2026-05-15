@@ -618,13 +618,12 @@
             _createEntityError = "Topic Name is required for subscriptions.";
             return;
         }
-        if (!string.IsNullOrWhiteSpace(_newDefaultMessageTtl) && !TimeSpan.TryParse(_newDefaultMessageTtl, out _))
+        if (!TryParseOptionalTimeSpan(_newDefaultMessageTtl, out _))
         {
             _createEntityError = "Default Message TTL must be a valid TimeSpan (for example, 00:30:00 or 14.00:00:00).";
             return;
         }
-        if (!string.IsNullOrWhiteSpace(_newMaxDeliveryCount)
-            && (!int.TryParse(_newMaxDeliveryCount, out var maxDeliveryCount) || maxDeliveryCount < 1))
+        if (!TryParseOptionalPositiveInt(_newMaxDeliveryCount, out _))
         {
             _createEntityError = "Max Delivery Count must be a whole number greater than 0.";
             return;
@@ -669,7 +668,7 @@
         var options = new CreateQueueOptions(queueName);
         ApplyDefaultMessageTtlIfSpecified(ttl => options.DefaultMessageTimeToLive = ttl);
         ApplyPartitioningIfSpecified(enable => options.EnablePartitioning = enable);
-        ApplyQueueLikeAdvancedOptions(
+        ApplySharedQueueAndSubscriptionOptions(
             maxDeliveryCount => options.MaxDeliveryCount = maxDeliveryCount,
             requiresSession => options.RequiresSession = requiresSession,
             forwardTo => options.ForwardTo = forwardTo,
@@ -689,7 +688,7 @@
     {
         var options = new CreateSubscriptionOptions(topicName, subscriptionName);
         ApplyDefaultMessageTtlIfSpecified(ttl => options.DefaultMessageTimeToLive = ttl);
-        ApplyQueueLikeAdvancedOptions(
+        ApplySharedQueueAndSubscriptionOptions(
             maxDeliveryCount => options.MaxDeliveryCount = maxDeliveryCount,
             requiresSession => options.RequiresSession = requiresSession,
             forwardTo => options.ForwardTo = forwardTo,
@@ -697,15 +696,16 @@
         return options;
     }
 
-    private void ApplyQueueLikeAdvancedOptions(
+    private void ApplySharedQueueAndSubscriptionOptions(
         Action<int> setMaxDeliveryCount,
         Action<bool> setRequiresSession,
         Action<string> setForwardTo,
         Action<string> setForwardDeadLetteredMessagesTo)
     {
-        if (!string.IsNullOrWhiteSpace(_newMaxDeliveryCount) && int.TryParse(_newMaxDeliveryCount, out var maxDeliveryCount))
+        if (TryParseOptionalPositiveInt(_newMaxDeliveryCount, out var maxDeliveryCount)
+            && maxDeliveryCount is not null)
         {
-            setMaxDeliveryCount(maxDeliveryCount);
+            setMaxDeliveryCount(maxDeliveryCount.Value);
         }
 
         if (TryGetOptionalBool(_newRequiresSession, out var requiresSession))
@@ -726,9 +726,10 @@
 
     private void ApplyDefaultMessageTtlIfSpecified(Action<TimeSpan> setDefaultMessageTtl)
     {
-        if (!string.IsNullOrWhiteSpace(_newDefaultMessageTtl) && TimeSpan.TryParse(_newDefaultMessageTtl, out var ttl))
+        if (TryParseOptionalTimeSpan(_newDefaultMessageTtl, out var ttl)
+            && ttl is not null)
         {
-            setDefaultMessageTtl(ttl);
+            setDefaultMessageTtl(ttl.Value);
         }
     }
 
@@ -744,6 +745,40 @@
     {
         parsed = false;
         return value is "true" or "false" && bool.TryParse(value, out parsed);
+    }
+
+    private static bool TryParseOptionalTimeSpan(string? value, out TimeSpan? parsed)
+    {
+        parsed = null;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        if (!TimeSpan.TryParse(value, out var timeSpan))
+        {
+            return false;
+        }
+
+        parsed = timeSpan;
+        return true;
+    }
+
+    private static bool TryParseOptionalPositiveInt(string? value, out int? parsed)
+    {
+        parsed = null;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        if (!int.TryParse(value, out var integer) || integer < 1)
+        {
+            return false;
+        }
+
+        parsed = integer;
+        return true;
     }
 
     private void OpenDeleteDialog()
