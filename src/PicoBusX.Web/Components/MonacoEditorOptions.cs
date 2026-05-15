@@ -52,7 +52,7 @@ internal static class MonacoEditorOptions
     {
         try
         {
-            System.Text.Json.JsonDocument.Parse(value);
+            using var _ = System.Text.Json.JsonDocument.Parse(value);
             error = null;
             return true;
         }
@@ -65,7 +65,7 @@ internal static class MonacoEditorOptions
 
     internal static bool TryFormatJson(string value, out string formattedJson, out string? error)
     {
-        if (!TryParseJson(value, out var jsonDocument, out error))
+        if (!TryParseJson(value, out var jsonDocument, out error) || jsonDocument is null)
         {
             formattedJson = value;
             return false;
@@ -80,7 +80,7 @@ internal static class MonacoEditorOptions
 
     internal static bool TryMinifyJson(string value, out string minifiedJson, out string? error)
     {
-        if (!TryParseJson(value, out var jsonDocument, out error))
+        if (!TryParseJson(value, out var jsonDocument, out error) || jsonDocument is null)
         {
             minifiedJson = value;
             return false;
@@ -93,7 +93,7 @@ internal static class MonacoEditorOptions
         }
     }
 
-    private static bool TryParseJson(string value, out System.Text.Json.JsonDocument jsonDocument, out string? error)
+    private static bool TryParseJson(string value, out System.Text.Json.JsonDocument? jsonDocument, out string? error)
     {
         try
         {
@@ -103,7 +103,7 @@ internal static class MonacoEditorOptions
         }
         catch (System.Text.Json.JsonException ex)
         {
-            jsonDocument = default!;
+            jsonDocument = null;
             error = ex.Message;
             return false;
         }

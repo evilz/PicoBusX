@@ -96,4 +96,16 @@ public class MonacoEditorOptionsTests
         error.Should().BeNull();
         minifiedJson.Should().Be("{\"name\":\"PicoBusX\",\"version\":10,\"features\":[\"format\",\"minify\"]}");
     }
+
+    [Fact]
+    public void TryMinifyJson_InvalidJson_ReturnsFalseAndOriginalValue()
+    {
+        var source = "{bad json";
+
+        var result = MonacoEditorOptions.TryMinifyJson(source, out var minifiedJson, out var error);
+
+        result.Should().BeFalse();
+        error.Should().NotBeNullOrWhiteSpace();
+        minifiedJson.Should().Be(source);
+    }
 }
