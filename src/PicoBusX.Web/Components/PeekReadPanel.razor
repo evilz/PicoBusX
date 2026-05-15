@@ -53,7 +53,7 @@
             @if (!string.IsNullOrWhiteSpace(msg.LockToken))
             {
                 var lockToken = msg.LockToken!;
-                var settling = _settlingLocks.Contains(lockToken);
+                var settling = _settlingLocks.ContainsKey(lockToken);
                 <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="6">
                     <FluentButton Appearance="Appearance.Accent"
                                   Disabled="@settling"
@@ -90,13 +90,13 @@
     [Parameter] public EventCallback<(string, int)> OnReceive { get; set; }
     [Parameter] public EventCallback<(string lockToken, MessageSettlementAction action)> OnSettle { get; set; }
 
-    private readonly HashSet<string> _settlingLocks = [];
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _settlingLocks = new();
 
     private async Task DoReceive() => await OnReceive.InvokeAsync((EntityPath, _maxCount));
 
     private async Task DoSettle(string lockToken, MessageSettlementAction action)
     {
-        _settlingLocks.Add(lockToken);
+        _settlingLocks.TryAdd(lockToken, 0);
         StateHasChanged();
         try
         {
@@ -104,7 +104,7 @@
         }
         finally
         {
-            _settlingLocks.Remove(lockToken);
+            _settlingLocks.TryRemove(lockToken, out _);
         }
     }
 }

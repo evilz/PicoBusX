@@ -381,12 +381,12 @@
     {
         if (!string.IsNullOrWhiteSpace(previousEntityPath))
         {
-            _ = Browser.ResetPendingMessagesAsync(previousEntityPath);
+            QueueResetPendingMessages(previousEntityPath);
         }
 
         if (_selectedEntity is not null)
         {
-            _ = Browser.ResetPendingMessagesAsync(_selectedEntity.EntityPath);
+            QueueResetPendingMessages(_selectedEntity.EntityPath);
         }
 
         _activeTab = "details";
@@ -494,17 +494,35 @@
             if (!settled)
             {
                 ToastService.ShowInfo("Message lock expired or is no longer available.");
-                _browsedMessages = _browsedMessages.Where(m => m.LockToken != args.lockToken).ToList();
-                return;
+            }
+            else
+            {
+                ToastService.ShowSuccess($"{args.action} completed.");
             }
 
             _browsedMessages = _browsedMessages.Where(m => m.LockToken != args.lockToken).ToList();
-            ToastService.ShowSuccess($"{args.action} completed.");
         }
         catch (Exception ex)
         {
             ToastService.ShowError($"Settlement failed: {ex.Message}");
             Logger.LogError(ex, "Failed to settle message with action {Action}", args.action);
+        }
+    }
+
+    private void QueueResetPendingMessages(string entityPath)
+    {
+        _ = ResetPendingMessagesCoreAsync(entityPath);
+    }
+
+    private async Task ResetPendingMessagesCoreAsync(string entityPath)
+    {
+        try
+        {
+            await Browser.ResetPendingMessagesAsync(entityPath);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to reset pending messages for {EntityPath}", entityPath);
         }
     }
 

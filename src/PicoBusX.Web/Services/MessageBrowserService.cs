@@ -21,8 +21,9 @@ public class MessageBrowserService
     private readonly ServiceBusClientFactory _factory;
     private readonly ILogger<MessageBrowserService> _logger;
     private readonly SemaphoreSlim _stateLock = new(1, 1);
-    private readonly Dictionary<string, LockedMessageContext> _lockedMessages = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, LockedMessageContext> _lockedMessages = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, HashSet<ServiceBusReceiver>> _receiversByEntity = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<ServiceBusReceiver, int> _receiverMessageCounts = [];
 
     private sealed record LockedMessageContext(string EntityPath, ServiceBusReceiver Receiver, ServiceBusReceivedMessage Message);
 
@@ -217,6 +218,11 @@ public class MessageBrowserService
             {
                 receivers = trackedReceivers.ToList();
                 _receiversByEntity.Remove(entityPath);
+
+                foreach (var receiver in receivers)
+                {
+                    _receiverMessageCounts.Remove(receiver);
+                }
             }
             else
             {
@@ -233,7 +239,7 @@ public class MessageBrowserService
             await TryAbandonAsync(context.Value.Receiver, context.Value.Message, "reset-pending", ct);
         }
 
-        foreach (var receiver in receivers.Distinct())
+        foreach (var receiver in receivers)
         {
             await receiver.DisposeAsync();
         }
@@ -370,6 +376,8 @@ public class MessageBrowserService
             }
 
             receivers.Add(receiver);
+            _receiverMessageCounts.TryGetValue(receiver, out var existingCount);
+            _receiverMessageCounts[receiver] = existingCount + messages.Count;
 
             foreach (var message in messages)
             {
@@ -391,22 +399,27 @@ public class MessageBrowserService
         {
             _lockedMessages.Remove(lockToken);
 
-            var hasOtherMessagesOnReceiver = _lockedMessages.Values.Any(c =>
-                !ReferenceEquals(c.Message, context.Message)
-                && ReferenceEquals(c.Receiver, context.Receiver));
-
-            if (!hasOtherMessagesOnReceiver)
+            if (_receiverMessageCounts.TryGetValue(context.Receiver, out var messageCount))
             {
-                if (_receiversByEntity.TryGetValue(context.EntityPath, out var receivers))
+                messageCount--;
+                if (messageCount <= 0)
                 {
-                    receivers.Remove(context.Receiver);
-                    if (receivers.Count == 0)
+                    _receiverMessageCounts.Remove(context.Receiver);
+                    if (_receiversByEntity.TryGetValue(context.EntityPath, out var receivers))
                     {
-                        _receiversByEntity.Remove(context.EntityPath);
+                        receivers.Remove(context.Receiver);
+                        if (receivers.Count == 0)
+                        {
+                            _receiversByEntity.Remove(context.EntityPath);
+                        }
                     }
-                }
 
-                disposeReceiver = true;
+                    disposeReceiver = true;
+                }
+                else
+                {
+                    _receiverMessageCounts[context.Receiver] = messageCount;
+                }
             }
         }
         finally
