@@ -52,7 +52,8 @@ internal static class MonacoEditorOptions
     {
         try
         {
-            using var _ = System.Text.Json.JsonDocument.Parse(value);
+            using var jsonDocument = System.Text.Json.JsonDocument.Parse(value);
+            _ = jsonDocument.RootElement;
             error = null;
             return true;
         }

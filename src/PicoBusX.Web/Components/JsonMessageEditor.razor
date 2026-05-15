@@ -149,8 +149,8 @@
         if (_editor is not null)
             _jsonPayload = await _editor.GetValue();
 
-        _jsonValid = MonacoEditorOptions.TryValidateJson(_jsonPayload, out var error);
-        _jsonError = error;
+        var isValid = MonacoEditorOptions.TryValidateJson(_jsonPayload, out var error);
+        SetJsonValidationState(isValid, error);
     }
 
     private async Task HandleFormatJson()
@@ -161,13 +161,11 @@
         if (MonacoEditorOptions.TryFormatJson(_jsonPayload, out var formattedJson, out var error))
         {
             await UpdatePayloadAndEditor(formattedJson);
-            _jsonError = null;
-            _jsonValid = true;
+            SetJsonValidationState(true, null);
             return;
         }
 
-        _jsonError = error;
-        _jsonValid = false;
+        SetJsonValidationState(false, error);
     }
 
     private async Task HandleMinifyJson()
@@ -178,13 +176,11 @@
         if (MonacoEditorOptions.TryMinifyJson(_jsonPayload, out var minifiedJson, out var error))
         {
             await UpdatePayloadAndEditor(minifiedJson);
-            _jsonError = null;
-            _jsonValid = true;
+            SetJsonValidationState(true, null);
             return;
         }
 
-        _jsonError = error;
-        _jsonValid = false;
+        SetJsonValidationState(false, error);
     }
 
     private async Task UpdatePayloadAndEditor(string payload)
@@ -192,6 +188,12 @@
         _jsonPayload = payload;
         if (_editor is not null)
             await _editor.SetValue(_jsonPayload);
+    }
+
+    private void SetJsonValidationState(bool isValid, string? error)
+    {
+        _jsonValid = isValid;
+        _jsonError = error;
     }
 
     private async Task HandleSend()
