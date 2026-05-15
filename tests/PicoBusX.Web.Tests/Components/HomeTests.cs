@@ -216,12 +216,14 @@ public class HomeTests : TestContext
     }
 
     [Fact]
-    public void Home_WhenCreateDialogUsesDefaultQueueType_ShowsAdvancedQueueOptions()
+    public async Task Home_CreateDialog_ShowsAdvancedQueueOptions()
     {
         SetupServices();
 
         var cut = RenderComponent<Home>();
+        await cut.InvokeAsync(() => InvokePrivateMethod(cut.Instance, "OpenCreateDialog"));
 
+        GetPrivateFieldValue<bool>(cut.Instance, "_createDialogHidden").Should().BeFalse();
         cut.Markup.Should().Contain("Advanced Options");
         cut.Markup.Should().Contain("Default Message TTL (hh:mm:ss)");
         cut.Markup.Should().Contain("Max Delivery Count");
@@ -232,14 +234,16 @@ public class HomeTests : TestContext
     }
 
     [Fact]
-    public void Home_WhenCreateDialogEntityTypeIsTopic_HidesQueueOnlyAdvancedOptions()
+    public async Task Home_CreateDialogForTopic_HidesQueueOnlyAdvancedOptions()
     {
         SetupServices();
 
         var cut = RenderComponent<Home>();
+        await cut.InvokeAsync(() => InvokePrivateMethod(cut.Instance, "OpenCreateDialog"));
         SetPrivateField(cut.Instance, "_newEntityType", "topic");
         cut.Render();
 
+        GetPrivateFieldValue<bool>(cut.Instance, "_createDialogHidden").Should().BeFalse();
         cut.Markup.Should().Contain("Default Message TTL (hh:mm:ss)");
         cut.Markup.Should().Contain("Enable Partitioning");
         cut.Markup.Should().NotContain("Max Delivery Count");
@@ -269,5 +273,13 @@ public class HomeTests : TestContext
         var field = typeof(TComponent).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException($"Field '{fieldName}' not found on {typeof(TComponent).Name}.");
         field.SetValue(instance, value);
+    }
+
+    private static TField GetPrivateFieldValue<TField>(object instance, string fieldName)
+    {
+        var instanceType = instance.GetType();
+        var field = instanceType.GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on {instanceType.Name}.");
+        return (TField)field.GetValue(instance)!;
     }
 }

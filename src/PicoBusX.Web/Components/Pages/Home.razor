@@ -357,6 +357,7 @@
     private string? _newForwardDeadLetteredMessagesTo;
     private bool _creatingEntity;
     private string? _createEntityError;
+    private const int MaxDeliveryCountUpperBound = 2000;
 
     // Delete entity dialog state
     private FluentDialog? _deleteDialog;
@@ -625,7 +626,7 @@
         }
         if (!TryParseOptionalPositiveInt(_newMaxDeliveryCount, out _))
         {
-            _createEntityError = "Max Delivery Count must be a whole number greater than 0.";
+            _createEntityError = $"Max Delivery Count must be a whole number between 1 and {MaxDeliveryCountUpperBound}.";
             return;
         }
         _creatingEntity = true;
@@ -708,7 +709,7 @@
             setMaxDeliveryCount(maxDeliveryCount.Value);
         }
 
-        if (TryGetOptionalBool(_newRequiresSession, out var requiresSession))
+        if (TryParseExplicitBool(_newRequiresSession, out var requiresSession))
         {
             setRequiresSession(requiresSession);
         }
@@ -735,13 +736,13 @@
 
     private void ApplyPartitioningIfSpecified(Action<bool> setEnablePartitioning)
     {
-        if (TryGetOptionalBool(_newEnablePartitioning, out var enablePartitioning))
+        if (TryParseExplicitBool(_newEnablePartitioning, out var enablePartitioning))
         {
             setEnablePartitioning(enablePartitioning);
         }
     }
 
-    private static bool TryGetOptionalBool(string? value, out bool parsed)
+    private static bool TryParseExplicitBool(string? value, out bool parsed)
     {
         parsed = false;
         return value is "true" or "false" && bool.TryParse(value, out parsed);
@@ -772,7 +773,7 @@
             return true;
         }
 
-        if (!int.TryParse(value, out var integer) || integer < 1)
+        if (!int.TryParse(value, out var integer) || integer < 1 || integer > MaxDeliveryCountUpperBound)
         {
             return false;
         }
