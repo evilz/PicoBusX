@@ -1,5 +1,6 @@
 ﻿@page "/"
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using Azure.Messaging.ServiceBus.Administration
 @inject NavigationManager NavigationManager
 @implements IDisposable
 @inject IExplorerService Explorer
@@ -130,6 +131,15 @@
                             HasMore="@_hasMoreDlqMessages"
                             ErrorMessage="@_dlqError" />
                     </FluentTab>
+                    @if (_selectedEntity.Type == BusEntityType.Subscription)
+                    {
+                        <FluentTab Id="rules" Label="Rules" Icon="@(new Icons.Regular.Size16.Filter())">
+                            <SubscriptionRulesPanel
+                                Rules="@GetCurrentSubscriptionRules()"
+                                OnCreateRule="HandleCreateRuleAsync"
+                                OnDeleteRule="HandleDeleteRuleAsync" />
+                        </FluentTab>
+                    }
                 }
                 else
                 {
@@ -532,6 +542,60 @@
         {
             ToastService.ShowError($"Resubmit failed: {ex.Message}");
             Logger.LogError(ex, "Failed to resubmit DLQ message");
+        }
+    }
+
+    private List<RuleInfo> GetCurrentSubscriptionRules()
+    {
+        if (_selectedEntity?.Type != BusEntityType.Subscription) return [];
+        return _topics
+            .FirstOrDefault(t => t.Name == _selectedEntity.TopicName)
+            ?.Subscriptions.FirstOrDefault(s => s.Name == _selectedEntity.Name)
+            ?.Rules ?? [];
+    }
+
+    private async Task HandleCreateRuleAsync((string name, string filterType, string? sqlExpression, string? actionExpression) args)
+    {
+        if (_selectedEntity is null) return;
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            RuleFilter filter = args.filterType switch
+            {
+                "true" => new TrueRuleFilter(),
+                "false" => new FalseRuleFilter(),
+                _ => new SqlRuleFilter(args.sqlExpression!)
+            };
+            SqlRuleAction? action = string.IsNullOrWhiteSpace(args.actionExpression)
+                ? null
+                : new SqlRuleAction(args.actionExpression);
+            await EntityManager.CreateRuleAsync(_selectedEntity.TopicName!, _selectedEntity.Name, args.name, filter, action, cts.Token);
+            ToastService.ShowSuccess($"Rule '{args.name}' created successfully!");
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to create rule: {ex.Message}");
+            Logger.LogError(ex, "Failed to create rule");
+            throw;
+        }
+    }
+
+    private async Task HandleDeleteRuleAsync(string ruleName)
+    {
+        if (_selectedEntity is null) return;
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await EntityManager.DeleteRuleAsync(_selectedEntity.TopicName!, _selectedEntity.Name, ruleName, cts.Token);
+            ToastService.ShowSuccess($"Rule '{ruleName}' deleted successfully!");
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Failed to delete rule: {ex.Message}");
+            Logger.LogError(ex, "Failed to delete rule");
+            throw;
         }
     }
 

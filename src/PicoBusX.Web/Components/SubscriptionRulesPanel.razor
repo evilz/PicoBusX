@@ -1,0 +1,181 @@
+@using PicoBusX.Web.Models
+
+@if (Rules.Count == 0)
+{
+    <FluentMessageBar Intent="MessageIntent.Info" Style="margin-bottom: 1rem;">
+        No rules defined. By default, Service Bus delivers all messages to the subscription.
+    </FluentMessageBar>
+}
+else
+{
+    <FluentCard Style="padding: 0; overflow: hidden; margin-bottom: 1rem;">
+        <table class="details-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Filter Type</th>
+                    <th>Filter Expression</th>
+                    <th>Action (SQL)</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var rule in Rules)
+                {
+                    <tr>
+                        <td>@rule.Name</td>
+                        <td>@rule.FilterType</td>
+                        <td>@(rule.FilterExpression ?? "—")</td>
+                        <td>@(rule.ActionExpression ?? "—")</td>
+                        <td>
+                            <FluentButton Appearance="Appearance.Stealth"
+                                          Title="Delete rule"
+                                          Style="color: #dc2626; padding: 0 0.25rem;"
+                                          OnClick="() => HandleDeleteAsync(rule.Name)"
+                                          Disabled="@_deleting">
+                                🗑
+                            </FluentButton>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </FluentCard>
+}
+
+<FluentButton Appearance="Appearance.Outline"
+              IconStart="@(new Icons.Regular.Size16.Add())"
+              OnClick="ToggleAddForm"
+              Style="margin-bottom: 0.75rem;">
+    Add Rule
+</FluentButton>
+
+@if (_showAddForm)
+{
+    <FluentCard Style="padding: 1rem; margin-bottom: 1rem;">
+        <FluentStack Orientation="Orientation.Vertical" Style="gap: 0.75rem;">
+            <FluentTextField Label="Rule Name"
+                             @bind-Value="_newRuleName"
+                             Placeholder="my-rule"
+                             Style="width: 100%;" />
+
+            <FluentSelect TOption="string"
+                          Label="Filter Type"
+                          @bind-Value="_newFilterType"
+                          Style="width: 100%;">
+                <FluentOption TOption="string" Value="sql">SQL</FluentOption>
+                <FluentOption TOption="string" Value="true">True (match all)</FluentOption>
+                <FluentOption TOption="string" Value="false">False (match none)</FluentOption>
+            </FluentSelect>
+
+            @if (_newFilterType == "sql")
+            {
+                <FluentTextField Label="SQL Filter Expression"
+                                 @bind-Value="_newSqlExpression"
+                                 Placeholder="e.g. sys.Label = 'order'"
+                                 Style="width: 100%;" />
+                <FluentTextField Label="SQL Action Expression (optional)"
+                                 @bind-Value="_newActionExpression"
+                                 Placeholder="e.g. SET sys.Label = 'processed'"
+                                 Style="width: 100%;" />
+            }
+
+            @if (!string.IsNullOrEmpty(_addError))
+            {
+                <FluentMessageBar Intent="MessageIntent.Error">@_addError</FluentMessageBar>
+            }
+
+            <FluentStack Orientation="Orientation.Horizontal" Style="gap: 0.5rem;">
+                <FluentButton Appearance="Appearance.Accent"
+                              OnClick="HandleCreateAsync"
+                              Disabled="@_creating">
+                    @if (_creating) { <span>Creating…</span> } else { <span>Create</span> }
+                </FluentButton>
+                <FluentButton Appearance="Appearance.Outline" OnClick="ToggleAddForm">Cancel</FluentButton>
+            </FluentStack>
+        </FluentStack>
+    </FluentCard>
+}
+
+@if (!string.IsNullOrEmpty(_deleteError))
+{
+    <FluentMessageBar Intent="MessageIntent.Error">@_deleteError</FluentMessageBar>
+}
+
+@code {
+    [Parameter] public List<RuleInfo> Rules { get; set; } = [];
+    [Parameter] public EventCallback<(string name, string filterType, string? sqlExpression, string? actionExpression)> OnCreateRule { get; set; }
+    [Parameter] public EventCallback<string> OnDeleteRule { get; set; }
+
+    private bool _showAddForm;
+    private string _newRuleName = string.Empty;
+    private string _newFilterType = "sql";
+    private string? _newSqlExpression;
+    private string? _newActionExpression;
+    private bool _creating;
+    private string? _addError;
+    private bool _deleting;
+    private string? _deleteError;
+
+    private void ToggleAddForm()
+    {
+        _showAddForm = !_showAddForm;
+        _newRuleName = string.Empty;
+        _newFilterType = "sql";
+        _newSqlExpression = null;
+        _newActionExpression = null;
+        _addError = null;
+    }
+
+    private async Task HandleCreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newRuleName))
+        {
+            _addError = "Rule name is required.";
+            return;
+        }
+        if (_newFilterType == "sql" && string.IsNullOrWhiteSpace(_newSqlExpression))
+        {
+            _addError = "SQL filter expression is required for SQL filters.";
+            return;
+        }
+
+        _creating = true;
+        _addError = null;
+        try
+        {
+            await OnCreateRule.InvokeAsync((_newRuleName.Trim(), _newFilterType, _newSqlExpression?.Trim(), _newActionExpression?.Trim()));
+            _showAddForm = false;
+            _newRuleName = string.Empty;
+            _newFilterType = "sql";
+            _newSqlExpression = null;
+            _newActionExpression = null;
+        }
+        catch (Exception ex)
+        {
+            _addError = ex.Message;
+        }
+        finally
+        {
+            _creating = false;
+        }
+    }
+
+    private async Task HandleDeleteAsync(string ruleName)
+    {
+        _deleting = true;
+        _deleteError = null;
+        try
+        {
+            await OnDeleteRule.InvokeAsync(ruleName);
+        }
+        catch (Exception ex)
+        {
+            _deleteError = ex.Message;
+        }
+        finally
+        {
+            _deleting = false;
+        }
+    }
+}

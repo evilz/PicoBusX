@@ -36,6 +36,35 @@ public class EntityManagementService(
             admin => admin.DeleteSubscriptionAsync(topicName, subscriptionName, ct),
             () => logger.LogInformation("Deleted subscription {SubscriptionName} on topic {TopicName}", subscriptionName, topicName));
 
+    public Task CreateRuleAsync(
+        string topicName,
+        string subscriptionName,
+        string ruleName,
+        RuleFilter filter,
+        SqlRuleAction? action = null,
+        CancellationToken ct = default) =>
+        ExecuteAdminOperationAsync(
+            admin => admin.CreateRuleAsync(topicName, subscriptionName, new CreateRuleOptions
+            {
+                Name = ruleName,
+                Filter = filter,
+                Action = action
+            }, ct),
+            () => logger.LogInformation(
+                "Created rule {RuleName} on subscription {SubscriptionName}/{TopicName}",
+                ruleName,
+                subscriptionName,
+                topicName));
+
+    public Task DeleteRuleAsync(string topicName, string subscriptionName, string ruleName, CancellationToken ct = default) =>
+        ExecuteAdminOperationAsync(
+            admin => admin.DeleteRuleAsync(topicName, subscriptionName, ruleName, ct),
+            () => logger.LogInformation(
+                "Deleted rule {RuleName} from subscription {SubscriptionName}/{TopicName}",
+                ruleName,
+                subscriptionName,
+                topicName));
+
     private async Task ExecuteAdminOperationAsync(
         Func<ServiceBusAdministrationClient, Task> operation,
         Action logSuccess)

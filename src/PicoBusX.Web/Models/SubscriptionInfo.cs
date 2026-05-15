@@ -22,4 +22,5 @@ public class SubscriptionInfo : IQueueLikeEntity
     public string? ForwardTo { get; set; }
     public string? ForwardDeadLetteredMessagesTo { get; set; }
     public string Status { get; set; } = string.Empty;
+    public List<RuleInfo> Rules { get; set; } = [];
 }

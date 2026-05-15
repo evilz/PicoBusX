@@ -158,6 +158,8 @@ public class ExplorerService(
             {
                 var runtime = await TryGetSubscriptionRuntimePropertiesAsync(admin, topicName, subscription.SubscriptionName, ct);
 
+                var rules = await GetRulesForSubscriptionAsync(admin, topicName, subscription.SubscriptionName, ct);
+
                 subscriptions.Add(new SubscriptionInfo
                 {
                     TopicName = topicName,
@@ -179,7 +181,8 @@ public class ExplorerService(
                     DeadLetteringOnFilterEvaluationExceptions = subscription.EnableDeadLetteringOnFilterEvaluationExceptions,
                     ForwardTo = NormalizeText(subscription.ForwardTo),
                     ForwardDeadLetteredMessagesTo = NormalizeText(subscription.ForwardDeadLetteredMessagesTo),
-                    Status = subscription.Status.ToString()
+                    Status = subscription.Status.ToString(),
+                    Rules = rules
                 });
             }
         }
@@ -189,6 +192,70 @@ public class ExplorerService(
         }
 
         return subscriptions;
+    }
+
+    private async Task<List<RuleInfo>> GetRulesForSubscriptionAsync(
+        ServiceBusAdministrationClient admin,
+        string topicName,
+        string subscriptionName,
+        CancellationToken ct)
+    {
+        var rules = new List<RuleInfo>();
+        try
+        {
+            await foreach (var rule in admin.GetRulesAsync(topicName, subscriptionName, ct))
+            {
+                rules.Add(new RuleInfo
+                {
+                    Name = rule.Name,
+                    FilterType = GetFilterType(rule.Filter),
+                    FilterExpression = GetFilterExpression(rule.Filter),
+                    ActionExpression = rule.Action is SqlRuleAction sqlAction ? sqlAction.SqlExpression : null
+                });
+            }
+        }
+        catch (Exception ex) when (!TryBuildUserFacingError(ex, out _))
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to get rules for subscription {SubscriptionName} on topic {TopicName}",
+                subscriptionName,
+                topicName);
+        }
+
+        return rules;
+    }
+
+    private static string GetFilterType(RuleFilter? filter) => filter switch
+    {
+        TrueRuleFilter => "True",
+        FalseRuleFilter => "False",
+        SqlRuleFilter => "SQL",
+        CorrelationRuleFilter => "Correlation",
+        _ => "Unknown"
+    };
+
+    private static string? GetFilterExpression(RuleFilter? filter) => filter switch
+    {
+        TrueRuleFilter => "1=1",
+        FalseRuleFilter => "1=0",
+        SqlRuleFilter sql => sql.SqlExpression,
+        CorrelationRuleFilter correlation => FormatCorrelationFilter(correlation),
+        _ => null
+    };
+
+    private static string FormatCorrelationFilter(CorrelationRuleFilter filter)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrEmpty(filter.CorrelationId)) parts.Add($"CorrelationId={filter.CorrelationId}");
+        if (!string.IsNullOrEmpty(filter.MessageId)) parts.Add($"MessageId={filter.MessageId}");
+        if (!string.IsNullOrEmpty(filter.To)) parts.Add($"To={filter.To}");
+        if (!string.IsNullOrEmpty(filter.ReplyTo)) parts.Add($"ReplyTo={filter.ReplyTo}");
+        if (!string.IsNullOrEmpty(filter.Subject)) parts.Add($"Subject={filter.Subject}");
+        if (!string.IsNullOrEmpty(filter.SessionId)) parts.Add($"SessionId={filter.SessionId}");
+        if (!string.IsNullOrEmpty(filter.ReplyToSessionId)) parts.Add($"ReplyToSessionId={filter.ReplyToSessionId}");
+        if (!string.IsNullOrEmpty(filter.ContentType)) parts.Add($"ContentType={filter.ContentType}");
+        return parts.Count > 0 ? string.Join(", ", parts) : "—";
     }
 
     private Task<SubscriptionRuntimeProperties?> TryGetSubscriptionRuntimePropertiesAsync(
