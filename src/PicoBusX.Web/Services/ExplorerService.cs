@@ -254,7 +254,7 @@ public class ExplorerService(
             FalseRuleFilter => "False",
             CorrelationRuleFilter correlation => BuildCorrelationFilterSummary(correlation),
             SqlRuleFilter sql => sql.SqlExpression,
-            _ => "—"
+            _ => "N/A"
         };
 
     private static string BuildCorrelationFilterSummary(CorrelationRuleFilter filter)

@@ -305,6 +305,8 @@
 </FluentDialog>
 
 @code {
+    private static readonly TimeSpan AdminOperationTimeout = TimeSpan.FromSeconds(30);
+
     private List<QueueInfo> _queues = new();
     private List<TopicInfo> _topics = new();
     [SupplyParameterFromQuery(Name = "name")]
@@ -784,7 +786,7 @@
 
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var cts = new CancellationTokenSource(AdminOperationTimeout);
             await EntityManager.UpsertSubscriptionSqlRuleAsync(
                 _selectedEntity.TopicName,
                 _selectedEntity.Name,
@@ -820,7 +822,7 @@
 
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var cts = new CancellationTokenSource(AdminOperationTimeout);
             await EntityManager.DeleteSubscriptionRuleAsync(
                 _selectedEntity.TopicName,
                 _selectedEntity.Name,
