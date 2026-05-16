@@ -41,6 +41,59 @@ public class MessageBrowserService : IAsyncDisposable
         return peeked.Select(m => MapMessage(m, _logger)).ToList();
     }
 
+    public async Task<List<BrowsedMessage>> PeekScheduledMessagesAsync(string entityPath, int maxCount, long? fromSequenceNumber = null, CancellationToken ct = default)
+    {
+        var client = _factory.GetClient();
+        await using var receiver = client.CreateReceiver(entityPath);
+
+        var results = new List<BrowsedMessage>();
+        long? nextSequenceNumber = fromSequenceNumber;
+
+        while (results.Count < maxCount)
+        {
+            var batchSize = Math.Max(maxCount, 25);
+            var peeked = await receiver.PeekMessagesAsync(batchSize, nextSequenceNumber, cancellationToken: ct);
+            if (peeked.Count == 0)
+            {
+                break;
+            }
+
+            foreach (var message in peeked)
+            {
+                if (!IsScheduledMessage(message))
+                {
+                    continue;
+                }
+
+                results.Add(MapMessage(message, _logger));
+                if (results.Count >= maxCount)
+                {
+                    break;
+                }
+            }
+
+            nextSequenceNumber = peeked[^1].SequenceNumber + 1;
+        }
+
+        return results;
+    }
+
+    public async Task CancelScheduledMessageAsync(string entityPath, long sequenceNumber, CancellationToken ct = default)
+    {
+        if (sequenceNumber <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(sequenceNumber), "Sequence number must be greater than zero.");
+        }
+
+        var senderPath = entityPath.Contains("/subscriptions/", StringComparison.OrdinalIgnoreCase)
+            ? entityPath.Split("/subscriptions/")[0]
+            : entityPath;
+
+        var client = _factory.GetClient();
+        await using var sender = client.CreateSender(senderPath);
+        await sender.CancelScheduledMessageAsync(sequenceNumber, ct);
+    }
+
     public async Task<List<BrowsedMessage>> ReceiveWithLockAsync(string entityPath, int maxCount, CancellationToken ct = default)
     {
         await ResetPendingMessagesAsync(entityPath, ct);
@@ -436,6 +489,9 @@ public class MessageBrowserService : IAsyncDisposable
         string body = string.Empty;
         try { body = m.Body?.ToString() ?? string.Empty; }
         catch (Exception ex) { logger?.LogWarning(ex, "Failed to read body of message {MessageId}", m.MessageId); body = "(error reading body)"; }
+        var scheduledEnqueueTime = m.ScheduledEnqueueTime == default ? (DateTimeOffset?)null : m.ScheduledEnqueueTime;
+        var isScheduled = m.State == ServiceBusMessageState.Scheduled || (scheduledEnqueueTime is not null && scheduledEnqueueTime > DateTimeOffset.UtcNow);
+
         return new BrowsedMessage
         {
             MessageId = m.MessageId,
@@ -451,8 +507,20 @@ public class MessageBrowserService : IAsyncDisposable
             ReceiverEntityPath = receiverEntityPath,
             SequenceNumber = m.SequenceNumber,
             DeadLetterReason = m.DeadLetterReason,
-            DeadLetterErrorDescription = m.DeadLetterErrorDescription
+            DeadLetterErrorDescription = m.DeadLetterErrorDescription,
+            IsScheduled = isScheduled,
+            ScheduledEnqueueTime = scheduledEnqueueTime
         };
+    }
+
+    private static bool IsScheduledMessage(ServiceBusReceivedMessage message)
+    {
+        if (message.State == ServiceBusMessageState.Scheduled)
+        {
+            return true;
+        }
+
+        return message.ScheduledEnqueueTime != default && message.ScheduledEnqueueTime > DateTimeOffset.UtcNow;
     }
 
     public async ValueTask DisposeAsync()
