@@ -2,19 +2,45 @@
 
 🚌 A minimalist **Azure Service Bus Explorer** built with ASP.NET Core Blazor Server (.NET 10).
 
-Built with **Aspire 13.1.2** for local development orchestration and **Microsoft FluentUI Blazor** for a dashboard UI inspired by the .NET Aspire Dashboard.
+Built with **Aspire 13.3.3** for local development orchestration and **Microsoft FluentUI Blazor** for a dashboard UI inspired by the .NET Aspire Dashboard.
 
-![PicoBusX Dashboard](https://github.com/user-attachments/assets/cc13c01d-4860-4701-b6db-1b59db5968d3)
+[![PicoBusX Dashboard](screenshots/home.png)](screenshots/home.png)
 
 ## Screenshots
 
-### Runtime Connection Setup
+### Main Dashboard
 
-![PicoBusX Connection Setup - Unconfigured State](https://github.com/user-attachments/assets/71bf20c1-578d-4e6a-bd61-8ad126052075)
+[![PicoBusX Home - Entity Explorer](screenshots/home.png)](screenshots/home.png)
 
-![PicoBusX Connection Setup - Connection String](https://github.com/user-attachments/assets/d9d40979-578e-4f84-bcb8-3889029d35b3)
+### Queue & Topic Details
 
-![PicoBusX Connection Setup - Service Principal](https://github.com/user-attachments/assets/ff59249b-f69b-4d6f-957c-7276b2dabb29)
+[![Queue Details](screenshots/queue.png)](screenshots/queue.png)
+
+[![Topic Details](screenshots/topic.png)](screenshots/topic.png)
+
+### Send Message
+
+[![Send Message with JSON Editor](screenshots/send_message.png)](screenshots/send_message.png)
+
+### Peek & Read Messages
+
+[![Peek and Read Messages](screenshots/peek_read.png)](screenshots/peek_read.png)
+
+### Filters
+
+[![Entity Filter / Search](screenshots/filters.png)](screenshots/filters.png)
+
+### Entity Settings
+
+[![Entity Settings](screenshots/entity_settings.png)](screenshots/entity_settings.png)
+
+### New Entity
+
+[![Create New Entity](screenshots/new_entity.png)](screenshots/new_entity.png)
+
+### Settings / Connection Setup
+
+[![Settings - Connection Setup](screenshots/settings.png)](screenshots/settings.png)
 
 ---
 
@@ -49,6 +75,12 @@ Aspire automatically orchestrates PicoBusX with a local Azure Service Bus Emulat
   ```
 - Docker Desktop must be running
 
+**Using Visual Studio / Rider:**
+1. Open `PicoBusX.slnx`
+2. Set `PicoBusX.AppHost` as the startup project
+3. Press `F5`
+
+**Using dotnet CLI:**
 ```bash
 cd src/PicoBusX.AppHost
 dotnet run
@@ -57,8 +89,6 @@ dotnet run
 The **Aspire Dashboard** opens at `http://localhost:4317`, showing the PicoBusX web app, the Azure Service Bus Emulator, traces, and logs.
 
 Then visit: **http://localhost:5000** (or the endpoint shown in the dashboard).
-
-See [PicoBusX.AppHost README](./src/PicoBusX.AppHost/README.md) for more details.
 
 ### Option 2: Manual Setup (Standalone)
 
@@ -82,6 +112,37 @@ Then open [https://localhost:7270](https://localhost:7270).
 ```bash
 dotnet test tests/PicoBusX.Web.Tests/PicoBusX.Web.Tests.csproj
 ```
+
+---
+
+## Architecture
+
+```
+PicoBusX.AppHost (Aspire Host - Orchestration) [.NET 10 + Aspire 13.3.3]
+├── serviceBus (Azure Service Bus Emulator running in Docker)
+└── picobusx (PicoBusX Web Application)
+    └── references → serviceBus
+```
+
+| Resource | Type | Description |
+|----------|------|-------------|
+| `serviceBus` | Azure Service Bus Emulator | Runs in Docker container for local development |
+| `picobusx` | Blazor Server Web App | PicoBusX web frontend, connected to Service Bus |
+
+### How It Works under Aspire
+
+1. **Service Discovery** — The connection string to the Service Bus Emulator is automatically injected into PicoBusX via `ConnectionStrings:serviceBus` and `SERVICEBUS_ADMINCONNECTIONSTRING` environment variables.
+2. **Dependency Management** — PicoBusX waits for the Service Bus Emulator to be ready before starting (`WaitFor`).
+3. **Local Emulation** — The emulator runs in a Docker container on two ports: `5672` (AMQP messaging) and `5300` (HTTP management REST API).
+4. **Client Integration** — `Aspire.Azure.Messaging.ServiceBus` registers a typed `ServiceBusClient` in DI; the custom `ServiceBusClientFactory` manages both messaging and administration clients.
+
+### Aspire Package Versions
+
+| Package | Version |
+|---------|---------|
+| `Aspire.Hosting` | 13.3.3 |
+| `Aspire.Hosting.Azure.ServiceBus` | 13.3.3 |
+| `Aspire.Azure.Messaging.ServiceBus` | 13.3.3 |
 
 ---
 
@@ -113,17 +174,11 @@ dotnet test tests/PicoBusX.Web.Tests/PicoBusX.Web.Tests.csproj
 
 The project uses GitHub Actions to **build**, **test**, and **publish a Docker image** to GitHub Container Registry (`ghcr.io`) on every push to `main`.
 
-### CI/CD assets in this repository
-
-The following files are already committed and provide the full CI/CD and containerization setup:
-
 - [GitHub Actions workflow](.github/workflows/ci.yml) — two-job pipeline: build & test, then Docker build & push
 - [Dockerfile](Dockerfile) — multi-stage build: `sdk:10.0` → `aspnet:10.0`, port 8080
 - [.dockerignore](.dockerignore) — excludes build artifacts, tests, and VCS metadata
 
 The workflow publishes to `ghcr.io/<owner>/picobusx` with tags: `latest` (main branch), branch name, and `sha-<commit>`.
-
-### Run the Docker image
 
 ```bash
 docker run \
@@ -138,10 +193,9 @@ docker run \
 
 ```
 src/
-├── PicoBusX.AppHost/          # Aspire Host (.NET 10)
-│   ├── Program.cs             # Aspire orchestration configuration
-│   ├── PicoBusX.AppHost.csproj
-│   └── README.md              # Detailed Aspire documentation
+├── PicoBusX.AppHost/          # Aspire Host (.NET 10 + Aspire 13.3.3)
+│   ├── AppHost.cs             # Aspire orchestration: emulator + web project wiring
+│   └── ServiceBusResourceBuilderExtensions.cs  # Admin connection string builder
 │
 └── PicoBusX.Web/              # Blazor Server (.NET 10)
     ├── Components/
@@ -167,9 +221,32 @@ src/
 
 ---
 
+## Troubleshooting
+
+### Docker not running
+
+```bash
+docker ps
+```
+
+Ensure Docker Desktop is running before starting the Aspire host.
+
+### Service Bus Emulator fails to start
+
+Check if ports `5671`/`5672` (AMQP) and `5300` (HTTP management) are available on your machine.
+
+### Connection string errors
+
+When running under Aspire, the injected connection string looks like:
+
+```
+Endpoint=sb://localhost:<port>;SharedAccessKeyName=...;SharedAccessKey=...;UseDevelopmentEmulator=true
+```
+
+---
+
 ## Known Limits
 
-- **Azure Service Bus Emulator** — ✅ Supported when running under Aspire
 - **No Azure AD / Managed Identity** support yet — only connection-string auth (SAS)
 - **Peek is non-destructive** — uses `PeekMessages`; Receive uses PeekLock and lets you settle each received message from the UI
 - **No dead-letter browser** — to peek DLQ, set entity path to `<queue>/$DeadLetterQueue`

@@ -9,12 +9,16 @@ namespace PicoBusX.AppHost
             IResourceBuilder<ProjectResource> targetProject,
             string environmentVariableName = "SERVICEBUS_ADMINCONNECTIONSTRING")
         {
+            // Capture the management endpoint reference at definition time.
+            // emulatorhealth maps container port 5300 (HTTP REST management API) to a host port.
+            var managementEndpoint = serviceBus.GetEndpoint("emulatorhealth");
+
             serviceBus.OnConnectionStringAvailable(async (resource, _, ct) =>
             {
                 var connectionString = await resource.GetConnectionProperty("connectionString").GetValueAsync(ct)
                                        ?? throw new InvalidOperationException(
                                            "Service Bus connection string is not available.");
-                var adminConnectionString = BuildAdminConnectionString(serviceBus, connectionString);
+                var adminConnectionString = BuildAdminConnectionString(connectionString, managementEndpoint);
                 targetProject.WithEnvironment(environmentVariableName, adminConnectionString);
             });
 
@@ -22,13 +26,15 @@ namespace PicoBusX.AppHost
         }
 
         private static string BuildAdminConnectionString(
-            IResourceBuilder<AzureServiceBusResource> serviceBus,
-            string connectionString)
+            string amqpConnectionString,
+            EndpointReference managementEndpoint)
         {
-            var parsedValues = ParseConnectionString(connectionString);
-            var healthEndpoint = serviceBus.GetEndpoint("emulatorhealth");
+            var parsedValues = ParseConnectionString(amqpConnectionString);
 
-            var adminConnectionString = $"Endpoint=sb://{healthEndpoint.Host}:{healthEndpoint.Port}";
+            // The ServiceBusAdministrationClient uses the REST management API (HTTP) on port 5300.
+            // Docker maps container port 5300 to managementEndpoint.Port on the host.
+            // Always use "localhost" — Docker containers are reachable on localhost from the host machine.
+            var adminConnectionString = $"Endpoint=sb://localhost:{managementEndpoint.Port}";
 
             if (parsedValues.TryGetValue("SharedAccessKeyName", out var keyName))
             {
@@ -40,10 +46,9 @@ namespace PicoBusX.AppHost
                 adminConnectionString += $";SharedAccessKey={key}";
             }
 
-            if (parsedValues.ContainsKey("UseDevelopmentEmulator"))
-            {
-                adminConnectionString += ";UseDevelopmentEmulator=true";
-            }
+            // Always required for the Azure SDK to use HTTP instead of AMQP for management calls
+            // when connecting to the local emulator.
+            adminConnectionString += ";UseDevelopmentEmulator=true";
 
             return adminConnectionString;
         }
