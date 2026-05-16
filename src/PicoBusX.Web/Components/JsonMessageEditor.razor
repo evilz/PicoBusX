@@ -173,8 +173,7 @@
         var formatted = MonacoEditorOptions.FormatJson(_jsonPayload);
         if (formatted is null)
         {
-            _jsonError = "Cannot format: invalid JSON.";
-            _jsonValid = false;
+            await ValidateJson();
             return;
         }
         _jsonPayload = formatted;
@@ -191,8 +190,7 @@
         var minified = MonacoEditorOptions.MinifyJson(_jsonPayload);
         if (minified is null)
         {
-            _jsonError = "Cannot minify: invalid JSON.";
-            _jsonValid = false;
+            await ValidateJson();
             return;
         }
         _jsonPayload = minified;

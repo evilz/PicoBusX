@@ -53,7 +53,7 @@ public class MonacoEditorOptionsTests
     [InlineData("   ")]
     public void FormatJson_EmptyOrWhitespace_ReturnsNull(string? value)
     {
-        MonacoEditorOptions.FormatJson(value!).Should().BeNull();
+        MonacoEditorOptions.FormatJson(value).Should().BeNull();
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public class MonacoEditorOptionsTests
     [InlineData("   ")]
     public void MinifyJson_EmptyOrWhitespace_ReturnsNull(string? value)
     {
-        MonacoEditorOptions.MinifyJson(value!).Should().BeNull();
+        MonacoEditorOptions.MinifyJson(value).Should().BeNull();
     }
 
     [Fact]
