@@ -51,7 +51,7 @@ public class MessageBrowserService : IAsyncDisposable
 
         while (results.Count < maxCount)
         {
-            var batchSize = Math.Max(maxCount, 25);
+            var batchSize = maxCount - results.Count;
             var peeked = await receiver.PeekMessagesAsync(batchSize, nextSequenceNumber, cancellationToken: ct);
             if (peeked.Count == 0)
             {
@@ -85,9 +85,12 @@ public class MessageBrowserService : IAsyncDisposable
             throw new ArgumentOutOfRangeException(nameof(sequenceNumber), "Sequence number must be greater than zero.");
         }
 
-        var senderPath = entityPath.Contains("/subscriptions/", StringComparison.OrdinalIgnoreCase)
-            ? entityPath.Split("/subscriptions/")[0]
-            : entityPath;
+        var senderPath = entityPath;
+        var subscriptionSegmentIndex = entityPath.IndexOf("/subscriptions/", StringComparison.OrdinalIgnoreCase);
+        if (subscriptionSegmentIndex >= 0)
+        {
+            senderPath = entityPath[..subscriptionSegmentIndex];
+        }
 
         var client = _factory.GetClient();
         await using var sender = client.CreateSender(senderPath);
@@ -489,8 +492,8 @@ public class MessageBrowserService : IAsyncDisposable
         string body = string.Empty;
         try { body = m.Body?.ToString() ?? string.Empty; }
         catch (Exception ex) { logger?.LogWarning(ex, "Failed to read body of message {MessageId}", m.MessageId); body = "(error reading body)"; }
-        var scheduledEnqueueTime = m.ScheduledEnqueueTime == default ? (DateTimeOffset?)null : m.ScheduledEnqueueTime;
-        var isScheduled = m.State == ServiceBusMessageState.Scheduled || (scheduledEnqueueTime is not null && scheduledEnqueueTime > DateTimeOffset.UtcNow);
+        var scheduledEnqueueTime = m.ScheduledEnqueueTime <= DateTimeOffset.MinValue ? (DateTimeOffset?)null : m.ScheduledEnqueueTime;
+        var isScheduled = IsScheduledMessage(m);
 
         return new BrowsedMessage
         {
@@ -520,7 +523,7 @@ public class MessageBrowserService : IAsyncDisposable
             return true;
         }
 
-        return message.ScheduledEnqueueTime != default && message.ScheduledEnqueueTime > DateTimeOffset.UtcNow;
+        return message.ScheduledEnqueueTime > DateTimeOffset.UtcNow;
     }
 
     public async ValueTask DisposeAsync()
