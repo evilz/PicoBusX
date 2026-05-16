@@ -87,9 +87,16 @@
                     <span class="entity-parent">under @_selectedEntity.TopicName</span>
                 }
                 <FluentButton Appearance="Appearance.Outline"
+                              IconStart="@(new Icons.Regular.Size16.Edit())"
+                              OnClick="OpenEditDialog"
+                              Style="margin-left: auto;"
+                              Title="Edit this entity">
+                    Edit
+                </FluentButton>
+                <FluentButton Appearance="Appearance.Outline"
                               IconStart="@(new Icons.Regular.Size16.Delete())"
                               OnClick="OpenDeleteDialog"
-                              Style="margin-left: auto; color: #dc2626; border-color: #dc2626;"
+                              Style="color: #dc2626; border-color: #dc2626;"
                               Title="Delete this entity">
                     Delete
                 </FluentButton>
@@ -99,6 +106,82 @@
                 <FluentTab Id="details" Label="Details" Icon="@(new Icons.Regular.Size16.List())">
                     <EntityDetailsPanel Entity="@_selectedEntity" Queues="@_queues" Topics="@_topics" />
                 </FluentTab>
+                @if (_selectedEntity.Type == BusEntityType.Subscription)
+                {
+                    var rules = GetSelectedSubscriptionRules();
+
+                    <FluentTab Id="rules" Label="Rules & Filters">
+                        <FluentStack Orientation="Orientation.Vertical" Style="gap: 1rem;">
+                            <FluentCard Style="padding: 1rem;">
+                                <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.5rem;">
+                                    Subscription rules
+                                </FluentLabel>
+
+                                @if (rules.Count == 0)
+                                {
+                                    <FluentMessageBar Intent="MessageIntent.Info">No rules found for this subscription.</FluentMessageBar>
+                                }
+                                else
+                                {
+                                    <table class="details-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Filter Type</th>
+                                                <th>Filter</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var rule in rules)
+                                            {
+                                                <tr>
+                                                    <td>@rule.Name</td>
+                                                    <td>@rule.FilterType</td>
+                                                    <td>@rule.FilterExpression</td>
+                                                    <td>
+                                                        <FluentButton Appearance="Appearance.Stealth"
+                                                                      Disabled="@_updatingRules"
+                                                                      OnClick="@(() => DeleteRuleAsync(rule.Name))">
+                                                            Delete
+                                                        </FluentButton>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                            </FluentCard>
+
+                            <FluentCard Style="padding: 1rem;">
+                                <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.5rem;">
+                                    Add or update SQL rule
+                                </FluentLabel>
+                                <FluentStack Orientation="Orientation.Vertical" Style="gap: 0.75rem;">
+                                    <FluentTextField Label="Rule Name"
+                                                     @bind-Value="_ruleName"
+                                                     Placeholder="$Default"
+                                                     Style="width: 100%;" />
+                                    <FluentTextArea Label="SQL Filter Expression"
+                                                    @bind-Value="_ruleSqlFilterExpression"
+                                                    Placeholder="sys.Label = 'important'"
+                                                    Rows="3"
+                                                    Style="width: 100%;" />
+                                    @if (!string.IsNullOrWhiteSpace(_ruleOperationError))
+                                    {
+                                        <FluentMessageBar Intent="MessageIntent.Error">@_ruleOperationError</FluentMessageBar>
+                                    }
+                                    <FluentButton Appearance="Appearance.Accent"
+                                                  Disabled="@_updatingRules"
+                                                  OnClick="SaveSqlRuleAsync"
+                                                  Style="width: fit-content;">
+                                        @if (_updatingRules) { <span>Saving…</span> } else { <span>Save Rule</span> }
+                                    </FluentButton>
+                                </FluentStack>
+                            </FluentCard>
+                        </FluentStack>
+                    </FluentTab>
+                }
                 @if (_selectedEntity.Type != BusEntityType.Topic)
                 {
                     <FluentTab Id="send" Label="Send Message" Icon="@(new Icons.Regular.Size16.Send())">
@@ -115,6 +198,7 @@
                             DefaultMaxCount="@BusOptions.Value.EntityMaxPeek"
                             OnPeek="HandlePeekAsync"
                             OnReceive="HandleReceiveAsync"
+                            OnSettle="HandleSettleAsync"
                             Messages="@_browsedMessages"
                             IsBusy="@_browsing"
                             HasMore="@_hasMoreMessages"
@@ -245,6 +329,89 @@
     </FluentDialogFooter>
 </FluentDialog>
 
+<!-- Edit Entity Dialog -->
+<FluentDialog @ref="_editDialog"
+              Hidden="@_editDialogHidden"
+              Modal="true"
+              TrapFocus="true"
+              PreventScroll="true"
+              @ondialogdismiss="CloseEditDialog">
+    <FluentDialogHeader ShowDismiss="true">
+        <strong>Edit Entity Settings</strong>
+    </FluentDialogHeader>
+    <FluentDialogBody>
+        @if (_selectedEntity is null)
+        {
+            <FluentMessageBar Intent="MessageIntent.Warning">No entity selected.</FluentMessageBar>
+        }
+        else
+        {
+            <FluentStack Orientation="Orientation.Vertical" Style="gap: 1rem; padding: 0.5rem 0; min-width: 340px;">
+                @if (_selectedEntity.Type == BusEntityType.Queue || _selectedEntity.Type == BusEntityType.Subscription)
+                {
+                    <FluentTextField Label="Lock Duration (c format)"
+                                     @bind-Value="_editForm.LockDuration"
+                                     Placeholder="00:01:00"
+                                     Style="width: 100%;" />
+
+                    <FluentTextField Label="Max Delivery Count"
+                                     @bind-Value="_editForm.MaxDeliveryCount"
+                                     Placeholder="10"
+                                     Style="width: 100%;" />
+                }
+
+                <FluentTextField Label="Default Message TTL (c format)"
+                                 @bind-Value="_editForm.DefaultMessageTimeToLive"
+                                 Placeholder="14.00:00:00"
+                                 Style="width: 100%;" />
+
+                <FluentTextField Label="Auto Delete On Idle (c format)"
+                                 @bind-Value="_editForm.AutoDeleteOnIdle"
+                                 Placeholder="10675199.02:48:05.4775807"
+                                 Style="width: 100%;" />
+
+                <FluentCheckbox Label="Enable batched operations" @bind-Value="_editForm.EnableBatchedOperations" />
+
+                @if (_selectedEntity.Type == BusEntityType.Topic)
+                {
+                    <FluentCheckbox Label="Support ordering" @bind-Value="_editForm.SupportOrdering" />
+                }
+                else
+                {
+                    <FluentCheckbox Label="Dead-letter on message expiration" @bind-Value="_editForm.DeadLetteringOnMessageExpiration" />
+                    <FluentTextField Label="Forward To"
+                                     @bind-Value="_editForm.ForwardTo"
+                                     Placeholder="target-entity"
+                                     Style="width: 100%;" />
+                    <FluentTextField Label="Forward Dead-Lettered Messages To"
+                                     @bind-Value="_editForm.ForwardDeadLetteredMessagesTo"
+                                     Placeholder="target-dead-letter-entity"
+                                     Style="width: 100%;" />
+
+                    @if (_selectedEntity.Type == BusEntityType.Subscription)
+                    {
+                        <FluentCheckbox Label="Dead-letter on filter evaluation exceptions"
+                                        @bind-Value="_editForm.DeadLetteringOnFilterEvaluationExceptions" />
+                    }
+                }
+
+                @if (!string.IsNullOrEmpty(_editEntityError))
+                {
+                    <FluentMessageBar Intent="MessageIntent.Error">@_editEntityError</FluentMessageBar>
+                }
+            </FluentStack>
+        }
+    </FluentDialogBody>
+    <FluentDialogFooter>
+        <FluentButton Appearance="Appearance.Accent"
+                      OnClick="SubmitUpdateEntityAsync"
+                      Disabled="@(_updatingEntity || _selectedEntity is null)">
+            @if (_updatingEntity) { <span>Saving…</span> } else { <span>Save</span> }
+        </FluentButton>
+        <FluentButton Appearance="Appearance.Outline" OnClick="CloseEditDialog">Cancel</FluentButton>
+    </FluentDialogFooter>
+</FluentDialog>
+
 <!-- Delete Entity Dialog -->
 <FluentDialog @ref="_deleteDialog"
               Hidden="@_deleteDialogHidden"
@@ -277,6 +444,22 @@
 </FluentDialog>
 
 @code {
+    private sealed class EntityEditFormState
+    {
+        public string LockDuration { get; set; } = string.Empty;
+        public string MaxDeliveryCount { get; set; } = string.Empty;
+        public string DefaultMessageTimeToLive { get; set; } = string.Empty;
+        public string AutoDeleteOnIdle { get; set; } = string.Empty;
+        public bool EnableBatchedOperations { get; set; }
+        public bool SupportOrdering { get; set; }
+        public bool DeadLetteringOnMessageExpiration { get; set; }
+        public bool DeadLetteringOnFilterEvaluationExceptions { get; set; }
+        public string? ForwardTo { get; set; }
+        public string? ForwardDeadLetteredMessagesTo { get; set; }
+    }
+
+    private static readonly TimeSpan AdminOperationTimeout = TimeSpan.FromSeconds(30);
+
     private List<QueueInfo> _queues = new();
     private List<TopicInfo> _topics = new();
     [SupplyParameterFromQuery(Name = "name")]
@@ -293,7 +476,7 @@
 
     private BusEntity? _selectedEntity;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         BusEntity? newEntity = null;
 
@@ -318,8 +501,9 @@
 
         if (selectionChanged)
         {
+            var previousEntityPath = _selectedEntity?.EntityPath;
             _selectedEntity = newEntity;
-            ResetEntityScopedState();
+            await ResetEntityScopedStateAsync(previousEntityPath);
         }
     }
     private string _activeTab = "details";
@@ -359,11 +543,22 @@
     private string? _createEntityError;
     private const int MaxDeliveryCountUpperBound = 2000;
 
+    // Edit entity dialog state
+    private FluentDialog? _editDialog;
+    private bool _editDialogHidden = true;
+    private EntityEditFormState _editForm = new();
+    private bool _updatingEntity;
+    private string? _editEntityError;
+
     // Delete entity dialog state
     private FluentDialog? _deleteDialog;
     private bool _deleteDialogHidden = true;
     private bool _deletingEntity;
     private string? _deleteEntityError;
+    private bool _updatingRules;
+    private string _ruleName = string.Empty;
+    private string _ruleSqlFilterExpression = string.Empty;
+    private string? _ruleOperationError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -417,8 +612,9 @@
         }
     }
 
-    private void HandleEntitySelected(BusEntity entity)
+    private async Task HandleEntitySelected(BusEntity entity)
     {
+        var previousEntityPath = _selectedEntity?.EntityPath;
         _selectedEntity = entity;
         NavigationManager.NavigateTo(NavigationManager.GetUriWithQueryParameters("/", new Dictionary<string, object?>
         {
@@ -426,11 +622,19 @@
             { "type", entity.Type.ToString() },
             { "topicName", entity.TopicName }
         }));
-        ResetEntityScopedState();
+        await ResetEntityScopedStateAsync(previousEntityPath);
     }
 
-    private void ResetEntityScopedState()
+    private async Task ResetEntityScopedStateAsync(string? previousEntityPath = null)
     {
+        var previousReset = !string.IsNullOrWhiteSpace(previousEntityPath)
+            ? ResetPendingMessagesSafeAsync(previousEntityPath)
+            : Task.CompletedTask;
+
+        var currentReset = _selectedEntity is not null
+            ? ResetPendingMessagesSafeAsync(_selectedEntity.EntityPath)
+            : Task.CompletedTask;
+
         _activeTab = "details";
         _browsedMessages = new();
         _hasMoreMessages = false;
@@ -440,6 +644,30 @@
         _dlqMessages = new();
         _hasMoreDlqMessages = false;
         _dlqError = null;
+        _updatingRules = false;
+        _ruleName = string.Empty;
+        _ruleSqlFilterExpression = string.Empty;
+        _ruleOperationError = null;
+
+        await Task.WhenAll(previousReset, currentReset);
+    }
+
+    private async Task ResetPendingMessagesSafeAsync(string entityPath)
+    {
+        try
+        {
+            await Browser.ResetPendingMessagesAsync(entityPath);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to reset pending messages for {EntityPath}", SanitizeForLog(entityPath));
+        }
+    }
+
+    private static string SanitizeForLog(string value)
+    {
+        return value.Replace("\r", "\\r", StringComparison.Ordinal)
+            .Replace("\n", "\\n", StringComparison.Ordinal);
     }
 
     private void HandleTabChange(FluentTab tab)
@@ -513,8 +741,8 @@
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             _browsedMessages = IsSessionEnabled()
-                ? await Browser.ReceiveAndAbandonSessionAsync(args.entityPath, args.maxCount, cts.Token)
-                : await Browser.ReceiveAndAbandonAsync(args.entityPath, args.maxCount, cts.Token);
+                ? await Browser.ReceiveSessionWithLockAsync(args.entityPath, args.maxCount, cts.Token)
+                : await Browser.ReceiveWithLockAsync(args.entityPath, args.maxCount, cts.Token);
         }
         catch (Exception ex)
         {
@@ -524,6 +752,30 @@
         finally
         {
             _browsing = false;
+        }
+    }
+
+    private async Task HandleSettleAsync((string lockToken, MessageSettlementAction action) args)
+    {
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var settled = await Browser.SettleReceivedMessageAsync(args.lockToken, args.action, cts.Token);
+            if (!settled)
+            {
+                ToastService.ShowInfo("Message lock expired or is no longer available.");
+            }
+            else
+            {
+                ToastService.ShowSuccess($"{args.action} completed.");
+            }
+
+            _browsedMessages = _browsedMessages.Where(m => m.LockToken != args.lockToken).ToList();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Settlement failed: {ex.Message}");
+            Logger.LogError(ex, "Failed to settle message with action {Action}", args.action);
         }
     }
 
@@ -624,7 +876,8 @@
             _createEntityError = "Default Message TTL must be a valid TimeSpan (for example, 00:30:00 or 14.00:00:00).";
             return;
         }
-        if (!TryParseOptionalPositiveInt(_newMaxDeliveryCount, out _))
+        if (_newEntityType is "queue" or "subscription"
+            && !TryParseOptionalPositiveInt(_newMaxDeliveryCount, out _))
         {
             _createEntityError = $"Max Delivery Count must be a whole number between 1 and {MaxDeliveryCountUpperBound}.";
             return;
@@ -782,6 +1035,264 @@
         return true;
     }
 
+    private void OpenEditDialog()
+    {
+        if (_selectedEntity is null)
+        {
+            return;
+        }
+
+        _editEntityError = null;
+
+        switch (_selectedEntity.Type)
+        {
+            case BusEntityType.Queue:
+                var queue = _queues.FirstOrDefault(q => q.Name == _selectedEntity.Name);
+                if (queue is null)
+                {
+                    ShowEditUnavailableError("Queue details are unavailable. Refresh and try again.");
+                    return;
+                }
+
+                _editForm = new EntityEditFormState
+                {
+                    LockDuration = queue.LockDuration.ToString("c"),
+                    MaxDeliveryCount = queue.MaxDeliveryCount.ToString(),
+                    DefaultMessageTimeToLive = queue.DefaultMessageTimeToLive.ToString("c"),
+                    AutoDeleteOnIdle = queue.AutoDeleteOnIdle.ToString("c"),
+                    EnableBatchedOperations = queue.EnableBatchedOperations,
+                    DeadLetteringOnMessageExpiration = queue.DeadLetteringOnMessageExpiration,
+                    ForwardTo = queue.ForwardTo,
+                    ForwardDeadLetteredMessagesTo = queue.ForwardDeadLetteredMessagesTo
+                };
+                break;
+
+            case BusEntityType.Topic:
+                var topic = _topics.FirstOrDefault(t => t.Name == _selectedEntity.Name);
+                if (topic is null)
+                {
+                    ShowEditUnavailableError("Topic details are unavailable. Refresh and try again.");
+                    return;
+                }
+
+                _editForm = new EntityEditFormState
+                {
+                    DefaultMessageTimeToLive = topic.DefaultMessageTimeToLive.ToString("c"),
+                    AutoDeleteOnIdle = topic.AutoDeleteOnIdle.ToString("c"),
+                    EnableBatchedOperations = topic.EnableBatchedOperations,
+                    SupportOrdering = topic.SupportOrdering
+                };
+                break;
+
+            case BusEntityType.Subscription:
+                var selectedTopic = _topics.FirstOrDefault(t => t.Name == _selectedEntity.TopicName);
+                var subscription = selectedTopic?.Subscriptions.FirstOrDefault(s => s.Name == _selectedEntity.Name);
+                if (subscription is null)
+                {
+                    ShowEditUnavailableError("Subscription details are unavailable. Refresh and try again.");
+                    return;
+                }
+
+                _editForm = new EntityEditFormState
+                {
+                    LockDuration = subscription.LockDuration.ToString("c"),
+                    MaxDeliveryCount = subscription.MaxDeliveryCount.ToString(),
+                    DefaultMessageTimeToLive = subscription.DefaultMessageTimeToLive.ToString("c"),
+                    AutoDeleteOnIdle = subscription.AutoDeleteOnIdle.ToString("c"),
+                    EnableBatchedOperations = subscription.EnableBatchedOperations,
+                    DeadLetteringOnMessageExpiration = subscription.DeadLetteringOnMessageExpiration,
+                    DeadLetteringOnFilterEvaluationExceptions = subscription.DeadLetteringOnFilterEvaluationExceptions,
+                    ForwardTo = subscription.ForwardTo,
+                    ForwardDeadLetteredMessagesTo = subscription.ForwardDeadLetteredMessagesTo
+                };
+                break;
+        }
+
+        _editDialogHidden = false;
+    }
+
+    private void ShowEditUnavailableError(string message)
+    {
+        _editEntityError = message;
+        _editDialogHidden = true;
+        ToastService.ShowError(message);
+    }
+
+    private void CloseEditDialog() => _editDialogHidden = true;
+
+    private async Task SubmitUpdateEntityAsync()
+    {
+        if (_selectedEntity is null)
+        {
+            return;
+        }
+
+        _updatingEntity = true;
+        _editEntityError = null;
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            switch (_selectedEntity.Type)
+            {
+                case BusEntityType.Queue:
+                    if (!TryBuildQueueUpdateOptions(out var queueOptions, out var queueError))
+                    {
+                        _editEntityError = queueError;
+                        return;
+                    }
+
+                    await EntityManager.UpdateQueueAsync(_selectedEntity.Name, queueOptions, cts.Token);
+                    break;
+                case BusEntityType.Topic:
+                    if (!TryBuildTopicUpdateOptions(out var topicOptions, out var topicError))
+                    {
+                        _editEntityError = topicError;
+                        return;
+                    }
+
+                    await EntityManager.UpdateTopicAsync(_selectedEntity.Name, topicOptions, cts.Token);
+                    break;
+                case BusEntityType.Subscription:
+                    if (_selectedEntity.TopicName is null)
+                    {
+                        _editEntityError = "A subscription must include a topic name.";
+                        return;
+                    }
+
+                    if (!TryBuildSubscriptionUpdateOptions(out var subscriptionOptions, out var subscriptionError))
+                    {
+                        _editEntityError = subscriptionError;
+                        return;
+                    }
+
+                    await EntityManager.UpdateSubscriptionAsync(_selectedEntity.TopicName, _selectedEntity.Name, subscriptionOptions, cts.Token);
+                    break;
+            }
+
+            ToastService.ShowSuccess($"{_selectedEntity.Type} '{_selectedEntity.Name}' updated successfully!");
+            CloseEditDialog();
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _editEntityError = ex.Message;
+            Logger.LogError(ex, "Failed to update entity settings");
+        }
+        finally
+        {
+            _updatingEntity = false;
+        }
+    }
+
+    private bool TryBuildQueueUpdateOptions(
+        out EntityManagementService.QueueUpdateOptions options,
+        out string? error)
+    {
+        options = default!;
+        error = null;
+
+        if (!TryParseDuration(_editForm.LockDuration, "Lock Duration", out var lockDuration, out error)
+            || !TryParsePositiveInt(_editForm.MaxDeliveryCount, "Max Delivery Count", out var maxDeliveryCount, out error)
+            || !TryParseDuration(_editForm.DefaultMessageTimeToLive, "Default Message TTL", out var defaultMessageTtl, out error)
+            || !TryParseDuration(_editForm.AutoDeleteOnIdle, "Auto Delete On Idle", out var autoDeleteOnIdle, out error))
+        {
+            return false;
+        }
+
+        options = new EntityManagementService.QueueUpdateOptions(
+            lockDuration,
+            maxDeliveryCount,
+            defaultMessageTtl,
+            autoDeleteOnIdle,
+            _editForm.EnableBatchedOperations,
+            _editForm.DeadLetteringOnMessageExpiration,
+            NormalizeOptionalText(_editForm.ForwardTo),
+            NormalizeOptionalText(_editForm.ForwardDeadLetteredMessagesTo));
+
+        return true;
+    }
+
+    private bool TryBuildTopicUpdateOptions(
+        out EntityManagementService.TopicUpdateOptions options,
+        out string? error)
+    {
+        options = default!;
+        error = null;
+
+        if (!TryParseDuration(_editForm.DefaultMessageTimeToLive, "Default Message TTL", out var defaultMessageTtl, out error)
+            || !TryParseDuration(_editForm.AutoDeleteOnIdle, "Auto Delete On Idle", out var autoDeleteOnIdle, out error))
+        {
+            return false;
+        }
+
+        options = new EntityManagementService.TopicUpdateOptions(
+            defaultMessageTtl,
+            autoDeleteOnIdle,
+            _editForm.EnableBatchedOperations,
+            _editForm.SupportOrdering);
+
+        return true;
+    }
+
+    private bool TryBuildSubscriptionUpdateOptions(
+        out EntityManagementService.SubscriptionUpdateOptions options,
+        out string? error)
+    {
+        options = default!;
+        error = null;
+
+        if (!TryParseDuration(_editForm.LockDuration, "Lock Duration", out var lockDuration, out error)
+            || !TryParsePositiveInt(_editForm.MaxDeliveryCount, "Max Delivery Count", out var maxDeliveryCount, out error)
+            || !TryParseDuration(_editForm.DefaultMessageTimeToLive, "Default Message TTL", out var defaultMessageTtl, out error)
+            || !TryParseDuration(_editForm.AutoDeleteOnIdle, "Auto Delete On Idle", out var autoDeleteOnIdle, out error))
+        {
+            return false;
+        }
+
+        options = new EntityManagementService.SubscriptionUpdateOptions(
+            lockDuration,
+            maxDeliveryCount,
+            defaultMessageTtl,
+            autoDeleteOnIdle,
+            _editForm.EnableBatchedOperations,
+            _editForm.DeadLetteringOnMessageExpiration,
+            _editForm.DeadLetteringOnFilterEvaluationExceptions,
+            NormalizeOptionalText(_editForm.ForwardTo),
+            NormalizeOptionalText(_editForm.ForwardDeadLetteredMessagesTo));
+
+        return true;
+    }
+
+    private static bool TryParseDuration(string? value, string fieldName, out TimeSpan parsed, out string? error)
+    {
+        if (TimeSpan.TryParse(value, out parsed))
+        {
+            error = null;
+            return true;
+        }
+
+        error = $"{fieldName} must be a valid duration (example: 00:01:00).";
+        return false;
+    }
+
+    private static bool TryParsePositiveInt(string? value, string fieldName, out int parsed, out string? error)
+    {
+        if (int.TryParse(value, out parsed) && parsed > 0)
+        {
+            error = null;
+            return true;
+        }
+
+        error = $"{fieldName} must be a positive number.";
+        return false;
+    }
+
+    private static string? NormalizeOptionalText(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
     private void OpenDeleteDialog()
     {
         _deleteEntityError = null;
@@ -854,6 +1365,100 @@
         BusEntityType.Subscription => "#065f46",
         _ => "#1e40af"
     };
+
+    private List<SubscriptionRuleInfo> GetSelectedSubscriptionRules()
+    {
+        if (_selectedEntity is null || _selectedEntity.Type != BusEntityType.Subscription || string.IsNullOrWhiteSpace(_selectedEntity.TopicName))
+        {
+            return new List<SubscriptionRuleInfo>();
+        }
+
+        var topic = _topics.FirstOrDefault(t => t.Name == _selectedEntity.TopicName);
+        var subscription = topic?.Subscriptions.FirstOrDefault(s => s.Name == _selectedEntity.Name);
+
+        return subscription?.Rules ?? new List<SubscriptionRuleInfo>();
+    }
+
+    private async Task SaveSqlRuleAsync()
+    {
+        if (_selectedEntity is null || _selectedEntity.Type != BusEntityType.Subscription || string.IsNullOrWhiteSpace(_selectedEntity.TopicName))
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_ruleName))
+        {
+            _ruleOperationError = "Rule name is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_ruleSqlFilterExpression))
+        {
+            _ruleOperationError = "SQL filter expression is required.";
+            return;
+        }
+
+        _updatingRules = true;
+        _ruleOperationError = null;
+
+        try
+        {
+            using var cts = new CancellationTokenSource(AdminOperationTimeout);
+            await EntityManager.UpsertSubscriptionSqlRuleAsync(
+                _selectedEntity.TopicName,
+                _selectedEntity.Name,
+                _ruleName.Trim(),
+                _ruleSqlFilterExpression.Trim(),
+                cts.Token);
+
+            ToastService.ShowSuccess($"Rule '{_ruleName.Trim()}' saved successfully.");
+            _ruleName = string.Empty;
+            _ruleSqlFilterExpression = string.Empty;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _ruleOperationError = ex.Message;
+            Logger.LogError(ex, "Failed to save subscription rule");
+        }
+        finally
+        {
+            _updatingRules = false;
+        }
+    }
+
+    private async Task DeleteRuleAsync(string ruleName)
+    {
+        if (_selectedEntity is null || _selectedEntity.Type != BusEntityType.Subscription || string.IsNullOrWhiteSpace(_selectedEntity.TopicName))
+        {
+            return;
+        }
+
+        _updatingRules = true;
+        _ruleOperationError = null;
+
+        try
+        {
+            using var cts = new CancellationTokenSource(AdminOperationTimeout);
+            await EntityManager.DeleteSubscriptionRuleAsync(
+                _selectedEntity.TopicName,
+                _selectedEntity.Name,
+                ruleName,
+                cts.Token);
+
+            ToastService.ShowSuccess($"Rule '{ruleName}' deleted successfully.");
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _ruleOperationError = ex.Message;
+            Logger.LogError(ex, "Failed to delete subscription rule");
+        }
+        finally
+        {
+            _updatingRules = false;
+        }
+    }
 
     public void Dispose() { }
 }
