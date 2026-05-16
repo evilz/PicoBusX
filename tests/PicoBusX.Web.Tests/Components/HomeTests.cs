@@ -260,6 +260,23 @@ public class HomeTests : TestContext
     }
 
     [Fact]
+    public async Task Home_CreateDialogForQueue_InvalidMaxDeliveryCount_ShowsValidationError()
+    {
+        SetupServices();
+
+        var cut = RenderComponent<Home>();
+        await cut.InvokeAsync(() => InvokePrivateMethod(cut.Instance, "OpenCreateDialog"));
+        SetPrivateField(cut.Instance, "_newEntityName", "orders");
+        SetPrivateField(cut.Instance, "_newMaxDeliveryCount", "invalid");
+
+        await cut.InvokeAsync(() => InvokePrivateMethod(cut.Instance, "SubmitCreateEntityAsync"));
+
+        GetPrivateField<string?>(cut.Instance, "_createEntityError")
+            .Should()
+            .Be("Max Delivery Count must be a whole number between 1 and 2000.");
+    }
+
+    [Fact]
     public void SubscriptionSelection_RendersRulesAndFiltersTabWithRuleData()
     {
         var sub = new SubscriptionInfo
