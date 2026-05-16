@@ -9,7 +9,19 @@
                          Style="width: 100%;" />
 
         <div style="width:100%">
-            <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.35rem;">JSON Payload</FluentLabel>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem;">
+                <FluentLabel Weight="FontWeight.Bold">JSON Payload</FluentLabel>
+                <div style="display: flex; gap: 0.25rem;">
+                    <FluentButton Appearance="Appearance.Lightweight"
+                                  IconStart="@(new Icons.Regular.Size16.TextIndentIncrease())"
+                                  OnClick="HandleFormat"
+                                  Title="Format JSON (pretty-print)">Format</FluentButton>
+                    <FluentButton Appearance="Appearance.Lightweight"
+                                  IconStart="@(new Icons.Regular.Size16.ArrowMinimize())"
+                                  OnClick="HandleMinify"
+                                  Title="Minify JSON (compact)">Minify</FluentButton>
+                </div>
+            </div>
             <div style="width:100%; border: 1px solid var(--neutral-stroke-rest); border-radius: 4px; overflow: hidden; @(_jsonError != null ? "border-color: #dc2626;" : "")">
                 <StandaloneCodeEditor @ref="_editor"
                                       Id="json-payload-editor"
@@ -152,6 +164,42 @@
             _jsonError = ex.Message;
             _jsonValid = false;
         }
+    }
+
+    private async Task HandleFormat()
+    {
+        if (_editor is not null)
+            _jsonPayload = await _editor.GetValue();
+        var formatted = MonacoEditorOptions.FormatJson(_jsonPayload);
+        if (formatted is null)
+        {
+            _jsonError = "Cannot format: invalid JSON.";
+            _jsonValid = false;
+            return;
+        }
+        _jsonPayload = formatted;
+        _jsonError = null;
+        _jsonValid = true;
+        if (_editor is not null)
+            await _editor.SetValue(_jsonPayload);
+    }
+
+    private async Task HandleMinify()
+    {
+        if (_editor is not null)
+            _jsonPayload = await _editor.GetValue();
+        var minified = MonacoEditorOptions.MinifyJson(_jsonPayload);
+        if (minified is null)
+        {
+            _jsonError = "Cannot minify: invalid JSON.";
+            _jsonValid = false;
+            return;
+        }
+        _jsonPayload = minified;
+        _jsonError = null;
+        _jsonValid = true;
+        if (_editor is not null)
+            await _editor.SetValue(_jsonPayload);
     }
 
     private async Task HandleSend()
