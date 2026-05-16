@@ -23,7 +23,7 @@ Built with **Aspire 13.1.2** for local development orchestration and **Microsoft
 - 🌲 **Interactive TreeView** — lists Queues, Topics, and Subscriptions (with filter/search)
 - 📋 **Entity Details** — active message count, dead-letter count, lock duration, session info, timestamps
 - 📤 **Send Message** — JSON editor with Format / Minify / Validate, optional headers, application properties
-- 👁️ **Peek / Read Messages** — non-destructive peek or PeekLock receive, with expandable message cards (body pretty-printed if JSON)
+- 👁️ **Peek / Read Messages** — non-destructive peek or PeekLock receive, with per-message settlement actions (complete, abandon, defer, dead-letter)
 - ✅ **Connection Status** — banner showing connected/not-connected with error details
 
 ---
@@ -171,7 +171,7 @@ src/
 
 - **Azure Service Bus Emulator** — ✅ Supported when running under Aspire
 - **No Azure AD / Managed Identity** support yet — only connection-string auth (SAS)
-- **Peek is non-destructive** — uses `PeekMessages`; Receive uses PeekLock and abandons immediately
+- **Peek is non-destructive** — uses `PeekMessages`; Receive uses PeekLock and lets you settle each received message from the UI
 - **No dead-letter browser** — to peek DLQ, set entity path to `<queue>/$DeadLetterQueue`
 - **No message filtering** — peek returns next N messages from the head of the queue/subscription
 - **No reconnect / retry UI** — restart the app if the connection string changes
