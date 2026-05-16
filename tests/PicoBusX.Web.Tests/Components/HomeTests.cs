@@ -215,6 +215,61 @@ public class HomeTests : TestContext
         result.Should().BeFalse();
     }
 
+    [Fact]
+    public void SubscriptionSelection_RendersRulesAndFiltersTabWithRuleData()
+    {
+        var sub = new SubscriptionInfo
+        {
+            TopicName = "orders-topic",
+            Name = "order-created",
+            Rules =
+            [
+                new SubscriptionRuleInfo
+                {
+                    Name = "high-priority",
+                    FilterType = "SQL",
+                    FilterExpression = "priority = 'high'"
+                }
+            ]
+        };
+        var topic = new TopicInfo { Name = "orders-topic", Subscriptions = [sub] };
+
+        SetupServices(new ExplorerLoadResult
+        {
+            Queues = [],
+            Topics = [topic]
+        });
+
+        var navManager = Services.GetRequiredService<FakeNavigationManager>();
+        navManager.NavigateTo("http://localhost/?name=order-created&type=Subscription&topicName=orders-topic");
+
+        var cut = RenderComponent<Home>();
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.Markup.Should().Contain("Rules &amp; Filters");
+            cut.Markup.Should().Contain("high-priority");
+            cut.Markup.Should().Contain("priority = 'high'");
+        });
+    }
+
+    [Fact]
+    public void QueueSelection_DoesNotRenderRulesAndFiltersTab()
+    {
+        SetupServices(new ExplorerLoadResult
+        {
+            Queues = [new QueueInfo { Name = "orders" }],
+            Topics = []
+        });
+
+        var navManager = Services.GetRequiredService<FakeNavigationManager>();
+        navManager.NavigateTo("http://localhost/?name=orders&type=Queue");
+
+        var cut = RenderComponent<Home>();
+
+        cut.WaitForAssertion(() => cut.Markup.Should().NotContain("Rules &amp; Filters"));
+    }
+
     private static Task InvokePrivateMethod<TComponent>(TComponent instance, string methodName, params object[] args)
     {
         var result = InvokePrivateMethodCore<TComponent>(instance, methodName, args);

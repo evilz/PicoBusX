@@ -98,6 +98,82 @@
                 <FluentTab Id="details" Label="Details" Icon="@(new Icons.Regular.Size16.List())">
                     <EntityDetailsPanel Entity="@_selectedEntity" Queues="@_queues" Topics="@_topics" />
                 </FluentTab>
+                @if (_selectedEntity.Type == BusEntityType.Subscription)
+                {
+                    var rules = GetSelectedSubscriptionRules();
+
+                    <FluentTab Id="rules" Label="Rules & Filters">
+                        <FluentStack Orientation="Orientation.Vertical" Style="gap: 1rem;">
+                            <FluentCard Style="padding: 1rem;">
+                                <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.5rem;">
+                                    Subscription rules
+                                </FluentLabel>
+
+                                @if (rules.Count == 0)
+                                {
+                                    <FluentMessageBar Intent="MessageIntent.Info">No rules found for this subscription.</FluentMessageBar>
+                                }
+                                else
+                                {
+                                    <table class="details-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Filter Type</th>
+                                                <th>Filter</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var rule in rules)
+                                            {
+                                                <tr>
+                                                    <td>@rule.Name</td>
+                                                    <td>@rule.FilterType</td>
+                                                    <td>@rule.FilterExpression</td>
+                                                    <td>
+                                                        <FluentButton Appearance="Appearance.Stealth"
+                                                                      Disabled="@_updatingRules"
+                                                                      OnClick="@(() => DeleteRuleAsync(rule.Name))">
+                                                            Delete
+                                                        </FluentButton>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                            </FluentCard>
+
+                            <FluentCard Style="padding: 1rem;">
+                                <FluentLabel Weight="FontWeight.Bold" Style="display: block; margin-bottom: 0.5rem;">
+                                    Add or update SQL rule
+                                </FluentLabel>
+                                <FluentStack Orientation="Orientation.Vertical" Style="gap: 0.75rem;">
+                                    <FluentTextField Label="Rule Name"
+                                                     @bind-Value="_ruleName"
+                                                     Placeholder="$Default"
+                                                     Style="width: 100%;" />
+                                    <FluentTextArea Label="SQL Filter Expression"
+                                                    @bind-Value="_ruleSqlFilterExpression"
+                                                    Placeholder="sys.Label = 'important'"
+                                                    Rows="3"
+                                                    Style="width: 100%;" />
+                                    @if (!string.IsNullOrWhiteSpace(_ruleOperationError))
+                                    {
+                                        <FluentMessageBar Intent="MessageIntent.Error">@_ruleOperationError</FluentMessageBar>
+                                    }
+                                    <FluentButton Appearance="Appearance.Accent"
+                                                  Disabled="@_updatingRules"
+                                                  OnClick="SaveSqlRuleAsync"
+                                                  Style="width: fit-content;">
+                                        @if (_updatingRules) { <span>Saving…</span> } else { <span>Save Rule</span> }
+                                    </FluentButton>
+                                </FluentStack>
+                            </FluentCard>
+                        </FluentStack>
+                    </FluentTab>
+                }
                 @if (_selectedEntity.Type != BusEntityType.Topic)
                 {
                     <FluentTab Id="send" Label="Send Message" Icon="@(new Icons.Regular.Size16.Send())">
@@ -230,6 +306,8 @@
 </FluentDialog>
 
 @code {
+    private static readonly TimeSpan AdminOperationTimeout = TimeSpan.FromSeconds(30);
+
     private List<QueueInfo> _queues = new();
     private List<TopicInfo> _topics = new();
     [SupplyParameterFromQuery(Name = "name")]
@@ -311,6 +389,10 @@
     private bool _deleteDialogHidden = true;
     private bool _deletingEntity;
     private string? _deleteEntityError;
+    private bool _updatingRules;
+    private string _ruleName = string.Empty;
+    private string _ruleSqlFilterExpression = string.Empty;
+    private string? _ruleOperationError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -396,6 +478,10 @@
         _dlqMessages = new();
         _hasMoreDlqMessages = false;
         _dlqError = null;
+        _updatingRules = false;
+        _ruleName = string.Empty;
+        _ruleSqlFilterExpression = string.Empty;
+        _ruleOperationError = null;
 
         await Task.WhenAll(previousReset, currentReset);
     }
@@ -711,6 +797,100 @@
         BusEntityType.Subscription => "#065f46",
         _ => "#1e40af"
     };
+
+    private List<SubscriptionRuleInfo> GetSelectedSubscriptionRules()
+    {
+        if (_selectedEntity is null || _selectedEntity.Type != BusEntityType.Subscription || string.IsNullOrWhiteSpace(_selectedEntity.TopicName))
+        {
+            return new List<SubscriptionRuleInfo>();
+        }
+
+        var topic = _topics.FirstOrDefault(t => t.Name == _selectedEntity.TopicName);
+        var subscription = topic?.Subscriptions.FirstOrDefault(s => s.Name == _selectedEntity.Name);
+
+        return subscription?.Rules ?? new List<SubscriptionRuleInfo>();
+    }
+
+    private async Task SaveSqlRuleAsync()
+    {
+        if (_selectedEntity is null || _selectedEntity.Type != BusEntityType.Subscription || string.IsNullOrWhiteSpace(_selectedEntity.TopicName))
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_ruleName))
+        {
+            _ruleOperationError = "Rule name is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_ruleSqlFilterExpression))
+        {
+            _ruleOperationError = "SQL filter expression is required.";
+            return;
+        }
+
+        _updatingRules = true;
+        _ruleOperationError = null;
+
+        try
+        {
+            using var cts = new CancellationTokenSource(AdminOperationTimeout);
+            await EntityManager.UpsertSubscriptionSqlRuleAsync(
+                _selectedEntity.TopicName,
+                _selectedEntity.Name,
+                _ruleName.Trim(),
+                _ruleSqlFilterExpression.Trim(),
+                cts.Token);
+
+            ToastService.ShowSuccess($"Rule '{_ruleName.Trim()}' saved successfully.");
+            _ruleName = string.Empty;
+            _ruleSqlFilterExpression = string.Empty;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _ruleOperationError = ex.Message;
+            Logger.LogError(ex, "Failed to save subscription rule");
+        }
+        finally
+        {
+            _updatingRules = false;
+        }
+    }
+
+    private async Task DeleteRuleAsync(string ruleName)
+    {
+        if (_selectedEntity is null || _selectedEntity.Type != BusEntityType.Subscription || string.IsNullOrWhiteSpace(_selectedEntity.TopicName))
+        {
+            return;
+        }
+
+        _updatingRules = true;
+        _ruleOperationError = null;
+
+        try
+        {
+            using var cts = new CancellationTokenSource(AdminOperationTimeout);
+            await EntityManager.DeleteSubscriptionRuleAsync(
+                _selectedEntity.TopicName,
+                _selectedEntity.Name,
+                ruleName,
+                cts.Token);
+
+            ToastService.ShowSuccess($"Rule '{ruleName}' deleted successfully.");
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _ruleOperationError = ex.Message;
+            Logger.LogError(ex, "Failed to delete subscription rule");
+        }
+        finally
+        {
+            _updatingRules = false;
+        }
+    }
 
     public void Dispose() { }
 }
