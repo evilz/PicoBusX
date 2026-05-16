@@ -605,8 +605,14 @@
         }
         catch (Exception ex)
         {
-            Logger.LogWarning(ex, "Failed to reset pending messages for {EntityPath}", entityPath);
+            Logger.LogWarning(ex, "Failed to reset pending messages for {EntityPath}", SanitizeForLog(entityPath));
         }
+    }
+
+    private static string SanitizeForLog(string value)
+    {
+        return value.Replace("\r", "\\r", StringComparison.Ordinal)
+            .Replace("\n", "\\n", StringComparison.Ordinal);
     }
 
     private void HandleTabChange(FluentTab tab)
