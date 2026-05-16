@@ -1,3 +1,5 @@
+using Azure;
+using Azure.Messaging.ServiceBus;
 using Azure.Messaging.ServiceBus.Administration;
 
 namespace PicoBusX.Web.Services;
@@ -32,7 +34,6 @@ public class EntityManagementService(
         bool DeadLetteringOnFilterEvaluationExceptions,
         string? ForwardTo,
         string? ForwardDeadLetteredMessagesTo);
-
     public Task CreateQueueAsync(string name, CancellationToken ct = default) =>
         ExecuteAdminOperationAsync(
             admin => admin.CreateQueueAsync(name, ct),
@@ -110,6 +111,53 @@ public class EntityManagementService(
                 await admin.UpdateSubscriptionAsync(subscription, ct);
             },
             () => logger.LogInformation("Updated subscription {SubscriptionName} on topic {TopicName}", subscriptionName, topicName));
+
+    public Task UpsertSubscriptionSqlRuleAsync(
+        string topicName,
+        string subscriptionName,
+        string ruleName,
+        string sqlFilterExpression,
+        CancellationToken ct = default) =>
+        ExecuteAdminOperationAsync(
+            async admin =>
+            {
+                try
+                {
+                    var response = await admin.GetRuleAsync(topicName, subscriptionName, ruleName, ct);
+                    var rule = response.Value;
+                    // Update the filter in-place to preserve any existing SQL action on the rule.
+                    rule.Filter = new SqlRuleFilter(sqlFilterExpression);
+                    await admin.UpdateRuleAsync(topicName, subscriptionName, rule, ct);
+                }
+                catch (RequestFailedException ex) when (ex.Status == 404)
+                {
+                    var options = new CreateRuleOptions(ruleName, new SqlRuleFilter(sqlFilterExpression));
+                    await admin.CreateRuleAsync(topicName, subscriptionName, options, ct);
+                }
+                catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.MessagingEntityNotFound)
+                {
+                    var options = new CreateRuleOptions(ruleName, new SqlRuleFilter(sqlFilterExpression));
+                    await admin.CreateRuleAsync(topicName, subscriptionName, options, ct);
+                }
+            },
+            () => logger.LogInformation(
+                "Saved SQL rule {RuleName} on subscription {SubscriptionName} and topic {TopicName}",
+                ruleName,
+                subscriptionName,
+                topicName));
+
+    public Task DeleteSubscriptionRuleAsync(
+        string topicName,
+        string subscriptionName,
+        string ruleName,
+        CancellationToken ct = default) =>
+        ExecuteAdminOperationAsync(
+            admin => admin.DeleteRuleAsync(topicName, subscriptionName, ruleName, ct),
+            () => logger.LogInformation(
+                "Deleted rule {RuleName} on subscription {SubscriptionName} and topic {TopicName}",
+                ruleName,
+                subscriptionName,
+                topicName));
 
     private async Task ExecuteAdminOperationAsync(
         Func<ServiceBusAdministrationClient, Task> operation,

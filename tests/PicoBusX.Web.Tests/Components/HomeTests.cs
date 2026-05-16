@@ -215,6 +215,139 @@ public class HomeTests : TestContext
         result.Should().BeFalse();
     }
 
+    [Fact]
+    public void SubscriptionSelection_RendersRulesAndFiltersTabWithRuleData()
+    {
+        var sub = new SubscriptionInfo
+        {
+            TopicName = "orders-topic",
+            Name = "order-created",
+            Rules =
+            [
+                new SubscriptionRuleInfo
+                {
+                    Name = "high-priority",
+                    FilterType = "SQL",
+                    FilterExpression = "priority = 'high'"
+                }
+            ]
+        };
+        var topic = new TopicInfo { Name = "orders-topic", Subscriptions = [sub] };
+
+        SetupServices(new ExplorerLoadResult
+        {
+            Queues = [],
+            Topics = [topic]
+        });
+
+        var navManager = Services.GetRequiredService<FakeNavigationManager>();
+        navManager.NavigateTo("http://localhost/?name=order-created&type=Subscription&topicName=orders-topic");
+
+        var cut = RenderComponent<Home>();
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.Markup.Should().Contain("Rules &amp; Filters");
+            cut.Markup.Should().Contain("high-priority");
+            cut.Markup.Should().Contain("priority = 'high'");
+        });
+    }
+
+    [Fact]
+    public void QueueSelection_DoesNotRenderRulesAndFiltersTab()
+    {
+        SetupServices(new ExplorerLoadResult
+        {
+            Queues = [new QueueInfo { Name = "orders" }],
+            Topics = []
+        });
+
+        var navManager = Services.GetRequiredService<FakeNavigationManager>();
+        navManager.NavigateTo("http://localhost/?name=orders&type=Queue");
+
+        var cut = RenderComponent<Home>();
+
+        cut.WaitForAssertion(() => cut.Markup.Should().NotContain("Rules &amp; Filters"));
+    }
+
+    [Fact]
+    public async Task OpenEditDialog_WithSelectedQueue_PrePopulatesEditFields()
+    {
+        var queue = new QueueInfo
+        {
+            Name = "orders",
+            LockDuration = TimeSpan.FromMinutes(2),
+            MaxDeliveryCount = 7,
+            DefaultMessageTimeToLive = TimeSpan.FromDays(3),
+            AutoDeleteOnIdle = TimeSpan.FromHours(12),
+            EnableBatchedOperations = true,
+            DeadLetteringOnMessageExpiration = true,
+            ForwardTo = "processed-orders",
+            ForwardDeadLetteredMessagesTo = "orders-dlq"
+        };
+
+        SetupServices(new ExplorerLoadResult
+        {
+            Queues = [queue],
+            Topics = []
+        });
+
+        var navManager = Services.GetRequiredService<FakeNavigationManager>();
+        navManager.NavigateTo("http://localhost/?name=orders&type=Queue");
+
+        var cut = RenderComponent<Home>();
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("orders"));
+
+        await cut.InvokeAsync(() => InvokePrivateMethod(cut.Instance, "OpenEditDialog"));
+
+        GetPrivateField<bool>(cut.Instance, "_editDialogHidden").Should().BeFalse();
+        var editForm = GetPrivateField<object>(cut.Instance, "_editForm");
+        GetPropertyValue<string>(editForm, "LockDuration").Should().Be(queue.LockDuration.ToString("c"));
+        GetPropertyValue<string>(editForm, "MaxDeliveryCount").Should().Be(queue.MaxDeliveryCount.ToString());
+        GetPropertyValue<string>(editForm, "DefaultMessageTimeToLive").Should().Be(queue.DefaultMessageTimeToLive.ToString("c"));
+        GetPropertyValue<string>(editForm, "AutoDeleteOnIdle").Should().Be(queue.AutoDeleteOnIdle.ToString("c"));
+        GetPropertyValue<bool>(editForm, "EnableBatchedOperations").Should().BeTrue();
+        GetPropertyValue<bool>(editForm, "DeadLetteringOnMessageExpiration").Should().BeTrue();
+        GetPropertyValue<string?>(editForm, "ForwardTo").Should().Be("processed-orders");
+        GetPropertyValue<string?>(editForm, "ForwardDeadLetteredMessagesTo").Should().Be("orders-dlq");
+    }
+
+    [Fact]
+    public async Task SubmitUpdateEntityAsync_WithInvalidInput_SetsValidationErrorAndSkipsUpdate()
+    {
+        SetupServices(new ExplorerLoadResult
+        {
+            Queues =
+            [
+                new QueueInfo
+                {
+                    Name = "orders",
+                    LockDuration = TimeSpan.FromMinutes(1),
+                    MaxDeliveryCount = 5,
+                    DefaultMessageTimeToLive = TimeSpan.FromHours(1),
+                    AutoDeleteOnIdle = TimeSpan.FromHours(1)
+                }
+            ],
+            Topics = []
+        });
+
+        var navManager = Services.GetRequiredService<FakeNavigationManager>();
+        navManager.NavigateTo("http://localhost/?name=orders&type=Queue");
+
+        var cut = RenderComponent<Home>();
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("orders"));
+
+        await cut.InvokeAsync(() => InvokePrivateMethod(cut.Instance, "OpenEditDialog"));
+        var editForm = GetPrivateField<object>(cut.Instance, "_editForm");
+        SetPropertyValue(editForm, "MaxDeliveryCount", "invalid");
+
+        await cut.InvokeAsync(() => InvokePrivateMethod(cut.Instance, "SubmitUpdateEntityAsync"));
+
+        GetPrivateField<string?>(cut.Instance, "_editEntityError").Should().Be("Max Delivery Count must be a positive number.");
+        GetPrivateField<bool>(cut.Instance, "_editDialogHidden").Should().BeFalse();
+        GetPrivateField<bool>(cut.Instance, "_updatingEntity").Should().BeFalse();
+    }
+
     private static Task InvokePrivateMethod<TComponent>(TComponent instance, string methodName, params object[] args)
     {
         var result = InvokePrivateMethodCore<TComponent>(instance, methodName, args);
@@ -223,6 +356,28 @@ public class HomeTests : TestContext
 
     private static bool InvokePrivateBoolMethod<TComponent>(TComponent instance, string methodName)
         => (bool)InvokePrivateMethodCore<TComponent>(instance, methodName, [])!;
+
+    private static TField GetPrivateField<TField>(object instance, string fieldName)
+    {
+        var instanceType = instance.GetType();
+        var field = instanceType.GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on {instanceType.Name}.");
+        return (TField)field.GetValue(instance)!;
+    }
+
+    private static TProperty GetPropertyValue<TProperty>(object instance, string propertyName)
+    {
+        var property = instance.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public)
+            ?? throw new InvalidOperationException($"Property '{propertyName}' not found on {instance.GetType().Name}.");
+        return (TProperty)property.GetValue(instance)!;
+    }
+
+    private static void SetPropertyValue(object instance, string propertyName, object? value)
+    {
+        var property = instance.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public)
+            ?? throw new InvalidOperationException($"Property '{propertyName}' not found on {instance.GetType().Name}.");
+        property.SetValue(instance, value);
+    }
 
     private static object? InvokePrivateMethodCore<TComponent>(TComponent instance, string methodName, object?[] args)
     {
