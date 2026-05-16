@@ -1,5 +1,6 @@
-﻿@page "/"
+@page "/"
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using Azure.Messaging.ServiceBus.Administration
 @inject NavigationManager NavigationManager
 @implements IDisposable
 @inject IExplorerService Explorer
@@ -265,6 +266,53 @@
                              Placeholder="my-entity-name"
                              Style="width: 100%;" />
 
+            <FluentDivider />
+            <FluentLabel Typography="Typography.PaneHeader">Advanced Options</FluentLabel>
+
+            <FluentTextField Label="Default Message TTL (hh:mm:ss)"
+                             @bind-Value="_newDefaultMessageTtl"
+                             Placeholder="e.g. 14.00:00:00"
+                             Style="width: 100%;" />
+
+            @if (_newEntityType is "queue" or "subscription")
+            {
+                <FluentTextField Label="Max Delivery Count"
+                                 @bind-Value="_newMaxDeliveryCount"
+                                 Placeholder="e.g. 10"
+                                 Style="width: 100%;" />
+
+                <FluentSelect TOption="string"
+                              Label="Requires Session"
+                              @bind-Value="_newRequiresSession"
+                              Style="width: 100%;">
+                    <FluentOption TOption="string" Value="default">Use Service Bus default</FluentOption>
+                    <FluentOption TOption="string" Value="true">Yes</FluentOption>
+                    <FluentOption TOption="string" Value="false">No</FluentOption>
+                </FluentSelect>
+
+                <FluentTextField Label="Forward To"
+                                 @bind-Value="_newForwardTo"
+                                 Placeholder="optional-forward-entity"
+                                 Style="width: 100%;" />
+
+                <FluentTextField Label="Forward Dead-Lettered Messages To"
+                                 @bind-Value="_newForwardDeadLetteredMessagesTo"
+                                 Placeholder="optional-forward-dlq-entity"
+                                 Style="width: 100%;" />
+            }
+
+            @if (_newEntityType is "queue" or "topic")
+            {
+                <FluentSelect TOption="string"
+                              Label="Enable Partitioning"
+                              @bind-Value="_newEnablePartitioning"
+                              Style="width: 100%;">
+                    <FluentOption TOption="string" Value="default">Use Service Bus default</FluentOption>
+                    <FluentOption TOption="string" Value="true">Yes</FluentOption>
+                    <FluentOption TOption="string" Value="false">No</FluentOption>
+                </FluentSelect>
+            }
+
             @if (!string.IsNullOrEmpty(_createEntityError))
             {
                 <FluentMessageBar Intent="MessageIntent.Error">@_createEntityError</FluentMessageBar>
@@ -485,8 +533,15 @@
     private string _newEntityType = "queue";
     private string _newEntityName = string.Empty;
     private string? _newTopicName;
+    private string? _newDefaultMessageTtl;
+    private string? _newMaxDeliveryCount;
+    private string _newRequiresSession = "default";
+    private string _newEnablePartitioning = "default";
+    private string? _newForwardTo;
+    private string? _newForwardDeadLetteredMessagesTo;
     private bool _creatingEntity;
     private string? _createEntityError;
+    private const int MaxDeliveryCountUpperBound = 2000;
 
     // Edit entity dialog state
     private FluentDialog? _editDialog;
@@ -792,6 +847,12 @@
         _newEntityType = "queue";
         _newEntityName = string.Empty;
         _newTopicName = null;
+        _newDefaultMessageTtl = null;
+        _newMaxDeliveryCount = null;
+        _newRequiresSession = "default";
+        _newEnablePartitioning = "default";
+        _newForwardTo = null;
+        _newForwardDeadLetteredMessagesTo = null;
         _createEntityError = null;
         _createDialogHidden = false;
     }
@@ -810,6 +871,17 @@
             _createEntityError = "Topic Name is required for subscriptions.";
             return;
         }
+        if (!TryParseOptionalTimeSpan(_newDefaultMessageTtl, out _))
+        {
+            _createEntityError = "Default Message TTL must be a valid TimeSpan (for example, 00:30:00 or 14.00:00:00).";
+            return;
+        }
+        if (_newEntityType is "queue" or "subscription"
+            && !TryParseOptionalPositiveInt(_newMaxDeliveryCount, out _))
+        {
+            _createEntityError = $"Max Delivery Count must be a whole number between 1 and {MaxDeliveryCountUpperBound}.";
+            return;
+        }
         _creatingEntity = true;
         _createEntityError = null;
         try
@@ -818,13 +890,16 @@
             switch (_newEntityType)
             {
                 case "queue":
-                    await EntityManager.CreateQueueAsync(_newEntityName.Trim(), cts.Token);
+                    var queueOptions = BuildQueueOptions(_newEntityName.Trim());
+                    await EntityManager.CreateQueueAsync(queueOptions, cts.Token);
                     break;
                 case "topic":
-                    await EntityManager.CreateTopicAsync(_newEntityName.Trim(), cts.Token);
+                    var topicOptions = BuildTopicOptions(_newEntityName.Trim());
+                    await EntityManager.CreateTopicAsync(topicOptions, cts.Token);
                     break;
                 case "subscription":
-                    await EntityManager.CreateSubscriptionAsync(_newTopicName!.Trim(), _newEntityName.Trim(), cts.Token);
+                    var subscriptionOptions = BuildSubscriptionOptions(_newTopicName!.Trim(), _newEntityName.Trim());
+                    await EntityManager.CreateSubscriptionAsync(subscriptionOptions, cts.Token);
                     break;
             }
             ToastService.ShowSuccess($"{char.ToUpper(_newEntityType[0])}{_newEntityType[1..]} '{_newEntityName}' created successfully!");
@@ -840,6 +915,124 @@
         {
             _creatingEntity = false;
         }
+    }
+
+    private CreateQueueOptions BuildQueueOptions(string queueName)
+    {
+        var options = new CreateQueueOptions(queueName);
+        ApplyDefaultMessageTtlIfSpecified(ttl => options.DefaultMessageTimeToLive = ttl);
+        ApplyPartitioningIfSpecified(enable => options.EnablePartitioning = enable);
+        ApplySharedQueueAndSubscriptionOptions(
+            maxDeliveryCount => options.MaxDeliveryCount = maxDeliveryCount,
+            requiresSession => options.RequiresSession = requiresSession,
+            forwardTo => options.ForwardTo = forwardTo,
+            forwardDeadLetteredMessagesTo => options.ForwardDeadLetteredMessagesTo = forwardDeadLetteredMessagesTo);
+        return options;
+    }
+
+    private CreateTopicOptions BuildTopicOptions(string topicName)
+    {
+        var options = new CreateTopicOptions(topicName);
+        ApplyDefaultMessageTtlIfSpecified(ttl => options.DefaultMessageTimeToLive = ttl);
+        ApplyPartitioningIfSpecified(enable => options.EnablePartitioning = enable);
+        return options;
+    }
+
+    private CreateSubscriptionOptions BuildSubscriptionOptions(string topicName, string subscriptionName)
+    {
+        var options = new CreateSubscriptionOptions(topicName, subscriptionName);
+        ApplyDefaultMessageTtlIfSpecified(ttl => options.DefaultMessageTimeToLive = ttl);
+        ApplySharedQueueAndSubscriptionOptions(
+            maxDeliveryCount => options.MaxDeliveryCount = maxDeliveryCount,
+            requiresSession => options.RequiresSession = requiresSession,
+            forwardTo => options.ForwardTo = forwardTo,
+            forwardDeadLetteredMessagesTo => options.ForwardDeadLetteredMessagesTo = forwardDeadLetteredMessagesTo);
+        return options;
+    }
+
+    private void ApplySharedQueueAndSubscriptionOptions(
+        Action<int> setMaxDeliveryCount,
+        Action<bool> setRequiresSession,
+        Action<string> setForwardTo,
+        Action<string> setForwardDeadLetteredMessagesTo)
+    {
+        if (TryParseOptionalPositiveInt(_newMaxDeliveryCount, out var maxDeliveryCount)
+            && maxDeliveryCount is not null)
+        {
+            setMaxDeliveryCount(maxDeliveryCount.Value);
+        }
+
+        if (TryParseExplicitBool(_newRequiresSession, out var requiresSession))
+        {
+            setRequiresSession(requiresSession);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_newForwardTo))
+        {
+            setForwardTo(_newForwardTo.Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(_newForwardDeadLetteredMessagesTo))
+        {
+            setForwardDeadLetteredMessagesTo(_newForwardDeadLetteredMessagesTo.Trim());
+        }
+    }
+
+    private void ApplyDefaultMessageTtlIfSpecified(Action<TimeSpan> setDefaultMessageTtl)
+    {
+        if (TryParseOptionalTimeSpan(_newDefaultMessageTtl, out var ttl)
+            && ttl is not null)
+        {
+            setDefaultMessageTtl(ttl.Value);
+        }
+    }
+
+    private void ApplyPartitioningIfSpecified(Action<bool> setEnablePartitioning)
+    {
+        if (TryParseExplicitBool(_newEnablePartitioning, out var enablePartitioning))
+        {
+            setEnablePartitioning(enablePartitioning);
+        }
+    }
+
+    private static bool TryParseExplicitBool(string? value, out bool parsed)
+    {
+        parsed = false;
+        return value is "true" or "false" && bool.TryParse(value, out parsed);
+    }
+
+    private static bool TryParseOptionalTimeSpan(string? value, out TimeSpan? parsed)
+    {
+        parsed = null;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        if (!TimeSpan.TryParse(value, out var timeSpan))
+        {
+            return false;
+        }
+
+        parsed = timeSpan;
+        return true;
+    }
+
+    private static bool TryParseOptionalPositiveInt(string? value, out int? parsed)
+    {
+        parsed = null;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        if (!int.TryParse(value, out var integer) || integer < 1 || integer > MaxDeliveryCountUpperBound)
+        {
+            return false;
+        }
+
+        parsed = integer;
+        return true;
     }
 
     private void OpenEditDialog()

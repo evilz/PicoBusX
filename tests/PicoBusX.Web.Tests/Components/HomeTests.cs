@@ -216,6 +216,67 @@ public class HomeTests : TestContext
     }
 
     [Fact]
+    public async Task Home_CreateDialog_ShowsAdvancedQueueOptions()
+    {
+        SetupServices();
+
+        var cut = RenderComponent<Home>();
+        await cut.InvokeAsync(() => InvokePrivateMethod(cut.Instance, "OpenCreateDialog"));
+
+        GetPrivateField<bool>(cut.Instance, "_createDialogHidden").Should().BeFalse();
+        cut.Markup.Should().Contain("Advanced Options");
+        cut.Markup.Should().Contain("Default Message TTL (hh:mm:ss)");
+        cut.Markup.Should().Contain("Max Delivery Count");
+        cut.Markup.Should().Contain("Requires Session");
+        cut.Markup.Should().Contain("Enable Partitioning");
+        cut.Markup.Should().Contain("Forward To");
+        cut.Markup.Should().Contain("Forward Dead-Lettered Messages To");
+    }
+
+    [Fact]
+    public async Task Home_CreateDialogForTopic_HidesQueueOnlyAdvancedOptions()
+    {
+        SetupServices();
+
+        var cut = RenderComponent<Home>();
+        await cut.InvokeAsync(() => InvokePrivateMethod(cut.Instance, "OpenCreateDialog"));
+        SetPrivateField(cut.Instance, "_newEntityType", "topic");
+        cut.Render();
+
+        GetPrivateField<bool>(cut.Instance, "_createDialogHidden").Should().BeFalse();
+        cut.Markup.Should().Contain("Default Message TTL (hh:mm:ss)");
+        cut.Markup.Should().Contain("Enable Partitioning");
+        cut.Markup.Should().NotContain("Max Delivery Count");
+        cut.Markup.Should().NotContain("Requires Session");
+        cut.Markup.Should().NotContain("Forward To");
+        cut.Markup.Should().NotContain("Forward Dead-Lettered Messages To");
+
+        SetPrivateField(cut.Instance, "_newMaxDeliveryCount", "invalid");
+        await cut.InvokeAsync(() => InvokePrivateMethod(cut.Instance, "SubmitCreateEntityAsync"));
+
+        GetPrivateField<string?>(cut.Instance, "_createEntityError")
+            .Should()
+            .NotBe("Max Delivery Count must be a whole number between 1 and 2000.");
+    }
+
+    [Fact]
+    public async Task Home_CreateDialogForQueue_InvalidMaxDeliveryCount_ShowsValidationError()
+    {
+        SetupServices();
+
+        var cut = RenderComponent<Home>();
+        await cut.InvokeAsync(() => InvokePrivateMethod(cut.Instance, "OpenCreateDialog"));
+        SetPrivateField(cut.Instance, "_newEntityName", "orders");
+        SetPrivateField(cut.Instance, "_newMaxDeliveryCount", "invalid");
+
+        await cut.InvokeAsync(() => InvokePrivateMethod(cut.Instance, "SubmitCreateEntityAsync"));
+
+        GetPrivateField<string?>(cut.Instance, "_createEntityError")
+            .Should()
+            .Be("Max Delivery Count must be a whole number between 1 and 2000.");
+    }
+
+    [Fact]
     public void SubscriptionSelection_RendersRulesAndFiltersTabWithRuleData()
     {
         var sub = new SubscriptionInfo
@@ -384,5 +445,12 @@ public class HomeTests : TestContext
         var method = typeof(TComponent).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException($"Method '{methodName}' not found on {typeof(TComponent).Name}.");
         return method.Invoke(instance, args);
+    }
+
+    private static void SetPrivateField<TComponent>(TComponent instance, string fieldName, object? value)
+    {
+        var field = typeof(TComponent).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Field '{fieldName}' not found on {typeof(TComponent).Name}.");
+        field.SetValue(instance, value);
     }
 }

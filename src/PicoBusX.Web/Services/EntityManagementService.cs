@@ -34,20 +34,30 @@ public class EntityManagementService(
         bool DeadLetteringOnFilterEvaluationExceptions,
         string? ForwardTo,
         string? ForwardDeadLetteredMessagesTo);
-    public Task CreateQueueAsync(string name, CancellationToken ct = default) =>
+
+    public Task CreateQueueAsync(CreateQueueOptions options, CancellationToken ct = default) =>
         ExecuteAdminOperationAsync(
-            admin => admin.CreateQueueAsync(name, ct),
-            () => logger.LogInformation("Created queue {QueueName}", name));
+            admin => admin.CreateQueueAsync(options, ct),
+            () => logger.LogInformation("Created queue {QueueName}", options.Name));
+
+    public Task CreateQueueAsync(string name, CancellationToken ct = default) =>
+        CreateQueueAsync(new CreateQueueOptions(name), ct);
+
+    public Task CreateTopicAsync(CreateTopicOptions options, CancellationToken ct = default) =>
+        ExecuteAdminOperationAsync(
+            admin => admin.CreateTopicAsync(options, ct),
+            () => logger.LogInformation("Created topic {TopicName}", options.Name));
 
     public Task CreateTopicAsync(string name, CancellationToken ct = default) =>
+        CreateTopicAsync(new CreateTopicOptions(name), ct);
+
+    public Task CreateSubscriptionAsync(CreateSubscriptionOptions options, CancellationToken ct = default) =>
         ExecuteAdminOperationAsync(
-            admin => admin.CreateTopicAsync(name, ct),
-            () => logger.LogInformation("Created topic {TopicName}", name));
+            admin => admin.CreateSubscriptionAsync(options, ct),
+            () => logger.LogInformation("Created subscription {SubscriptionName} on topic {TopicName}", options.SubscriptionName, options.TopicName));
 
     public Task CreateSubscriptionAsync(string topicName, string subscriptionName, CancellationToken ct = default) =>
-        ExecuteAdminOperationAsync(
-            admin => admin.CreateSubscriptionAsync(topicName, subscriptionName, ct),
-            () => logger.LogInformation("Created subscription {SubscriptionName} on topic {TopicName}", subscriptionName, topicName));
+        CreateSubscriptionAsync(new CreateSubscriptionOptions(topicName, subscriptionName), ct);
 
     public Task DeleteQueueAsync(string name, CancellationToken ct = default) =>
         ExecuteAdminOperationAsync(
