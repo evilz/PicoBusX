@@ -246,7 +246,7 @@
 
     private BusEntity? _selectedEntity;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         BusEntity? newEntity = null;
 
@@ -273,7 +273,7 @@
         {
             var previousEntityPath = _selectedEntity?.EntityPath;
             _selectedEntity = newEntity;
-            ResetEntityScopedState(previousEntityPath);
+            await ResetEntityScopedStateAsync(previousEntityPath);
         }
     }
     private string _activeTab = "details";
@@ -364,7 +364,7 @@
         }
     }
 
-    private void HandleEntitySelected(BusEntity entity)
+    private async Task HandleEntitySelected(BusEntity entity)
     {
         var previousEntityPath = _selectedEntity?.EntityPath;
         _selectedEntity = entity;
@@ -374,20 +374,18 @@
             { "type", entity.Type.ToString() },
             { "topicName", entity.TopicName }
         }));
-        ResetEntityScopedState(previousEntityPath);
+        await ResetEntityScopedStateAsync(previousEntityPath);
     }
 
-    private void ResetEntityScopedState(string? previousEntityPath = null)
+    private async Task ResetEntityScopedStateAsync(string? previousEntityPath = null)
     {
-        if (!string.IsNullOrWhiteSpace(previousEntityPath))
-        {
-            QueueResetPendingMessages(previousEntityPath);
-        }
+        var previousReset = !string.IsNullOrWhiteSpace(previousEntityPath)
+            ? ResetPendingMessagesSafeAsync(previousEntityPath)
+            : Task.CompletedTask;
 
-        if (_selectedEntity is not null)
-        {
-            QueueResetPendingMessages(_selectedEntity.EntityPath);
-        }
+        var currentReset = _selectedEntity is not null
+            ? ResetPendingMessagesSafeAsync(_selectedEntity.EntityPath)
+            : Task.CompletedTask;
 
         _activeTab = "details";
         _browsedMessages = new();
@@ -398,6 +396,20 @@
         _dlqMessages = new();
         _hasMoreDlqMessages = false;
         _dlqError = null;
+
+        await Task.WhenAll(previousReset, currentReset);
+    }
+
+    private async Task ResetPendingMessagesSafeAsync(string entityPath)
+    {
+        try
+        {
+            await Browser.ResetPendingMessagesAsync(entityPath);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to reset pending messages for {EntityPath}", entityPath);
+        }
     }
 
     private void HandleTabChange(FluentTab tab)
@@ -506,23 +518,6 @@
         {
             ToastService.ShowError($"Settlement failed: {ex.Message}");
             Logger.LogError(ex, "Failed to settle message with action {Action}", args.action);
-        }
-    }
-
-    private void QueueResetPendingMessages(string entityPath)
-    {
-        _ = ResetPendingMessagesCoreAsync(entityPath);
-    }
-
-    private async Task ResetPendingMessagesCoreAsync(string entityPath)
-    {
-        try
-        {
-            await Browser.ResetPendingMessagesAsync(entityPath);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(ex, "Failed to reset pending messages for {EntityPath}", entityPath);
         }
     }
 

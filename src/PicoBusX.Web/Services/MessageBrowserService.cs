@@ -87,7 +87,6 @@ public class MessageBrowserService : IAsyncDisposable
         await ResetPendingMessagesAsync(entityPath, ct);
 
         var results = new List<BrowsedMessage>();
-        var receiversToDispose = new List<ServiceBusSessionReceiver>();
         var seenSessions = new HashSet<string>();
         var client = _factory.GetClient();
 
@@ -116,24 +115,23 @@ public class MessageBrowserService : IAsyncDisposable
                 break;
             }
 
-            var remaining = maxCount - results.Count;
-            var messages = await sessionReceiver.ReceiveMessagesAsync(remaining, maxWaitTime: TimeSpan.FromSeconds(ReceiveWaitSeconds), cancellationToken: ct);
-            if (messages.Count == 0)
+            try
+            {
+                var remaining = maxCount - results.Count;
+                var messages = await sessionReceiver.ReceiveMessagesAsync(remaining, maxWaitTime: TimeSpan.FromSeconds(ReceiveWaitSeconds), cancellationToken: ct);
+                if (messages.Count == 0)
+                {
+                    await sessionReceiver.DisposeAsync();
+                    continue;
+                }
+
+                await TrackLockedMessagesAsync(entityPath, sessionReceiver, messages, ct);
+                results.AddRange(messages.Select(m => MapMessage(m, _logger, includeLockToken: true, receiverEntityPath: entityPath)));
+            }
+            catch (Exception)
             {
                 await sessionReceiver.DisposeAsync();
-                continue;
-            }
-
-            await TrackLockedMessagesAsync(entityPath, sessionReceiver, messages, ct);
-            results.AddRange(messages.Select(m => MapMessage(m, _logger, includeLockToken: true, receiverEntityPath: entityPath)));
-            receiversToDispose.Add(sessionReceiver);
-        }
-
-        if (results.Count == 0)
-        {
-            foreach (var receiver in receiversToDispose)
-            {
-                await receiver.DisposeAsync();
+                throw;
             }
         }
 
