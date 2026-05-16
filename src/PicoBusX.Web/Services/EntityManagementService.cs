@@ -1,4 +1,5 @@
 using Azure;
+using Azure.Messaging.ServiceBus;
 using Azure.Messaging.ServiceBus.Administration;
 
 namespace PicoBusX.Web.Services;
@@ -46,13 +47,24 @@ public class EntityManagementService(
         ExecuteAdminOperationAsync(
             async admin =>
             {
-                if (await RuleExistsAsync(admin, topicName, subscriptionName, ruleName, ct))
+                try
                 {
-                    await admin.DeleteRuleAsync(topicName, subscriptionName, ruleName, ct);
+                    var response = await admin.GetRuleAsync(topicName, subscriptionName, ruleName, ct);
+                    var rule = response.Value;
+                    // Update the filter in-place to preserve any existing SQL action on the rule.
+                    rule.Filter = new SqlRuleFilter(sqlFilterExpression);
+                    await admin.UpdateRuleAsync(topicName, subscriptionName, rule, ct);
                 }
-
-                var options = new CreateRuleOptions(ruleName, new SqlRuleFilter(sqlFilterExpression));
-                await admin.CreateRuleAsync(topicName, subscriptionName, options, ct);
+                catch (RequestFailedException ex) when (ex.Status == 404)
+                {
+                    var options = new CreateRuleOptions(ruleName, new SqlRuleFilter(sqlFilterExpression));
+                    await admin.CreateRuleAsync(topicName, subscriptionName, options, ct);
+                }
+                catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.MessagingEntityNotFound)
+                {
+                    var options = new CreateRuleOptions(ruleName, new SqlRuleFilter(sqlFilterExpression));
+                    await admin.CreateRuleAsync(topicName, subscriptionName, options, ct);
+                }
             },
             () => logger.LogInformation(
                 "Saved SQL rule {RuleName} on subscription {SubscriptionName} and topic {TopicName}",
@@ -72,24 +84,6 @@ public class EntityManagementService(
                 ruleName,
                 subscriptionName,
                 topicName));
-
-    private static async Task<bool> RuleExistsAsync(
-        ServiceBusAdministrationClient admin,
-        string topicName,
-        string subscriptionName,
-        string ruleName,
-        CancellationToken ct)
-    {
-        try
-        {
-            var response = await admin.GetRuleAsync(topicName, subscriptionName, ruleName, ct);
-            return response.Value is not null;
-        }
-        catch (RequestFailedException ex) when (ex.Status == 404)
-        {
-            return false;
-        }
-    }
 
     private async Task ExecuteAdminOperationAsync(
         Func<ServiceBusAdministrationClient, Task> operation,
