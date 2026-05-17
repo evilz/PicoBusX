@@ -2,6 +2,10 @@
 @inherits MessagePanelBase
 
 <div class="peek-panel">
+    @{
+        var filteredMessages = FilterMessages(Messages);
+    }
+
     <MessagePanelToolbar MaxCount="@_maxCount"
                          MaxCountChanged="@(v => _maxCount = v)"
                          FilterText="@_filterText"
@@ -12,9 +16,37 @@
                          HasMore="@HasMore"
                          HasMessages="@Messages.Any()"
                          OnLoadMore="DoLoadMore"
-                         ErrorMessage="@ErrorMessage" />
+                         ErrorMessage="@ErrorMessage">
+        <ActionButtons>
+            <FluentButton Appearance="Appearance.Outline"
+                          IconStart="@(new Icons.Regular.Size16.CheckboxChecked())"
+                          OnClick="() => SelectVisible(filteredMessages)"
+                          Disabled="@(!filteredMessages.Any() || IsBusy)">
+                Select Visible
+            </FluentButton>
+            <FluentButton Appearance="Appearance.Outline"
+                          IconStart="@(new Icons.Regular.Size16.DismissCircle())"
+                          OnClick="ClearSelection"
+                          Disabled="@(_selected.Count == 0 || IsBusy)">
+                Clear Selection (@_selected.Count)
+            </FluentButton>
+            <FluentButton Appearance="Appearance.Accent"
+                          IconStart="@(new Icons.Regular.Size16.ArrowCircleUp())"
+                          OnClick="DoBulkResubmit"
+                          Disabled="@(_selected.Count == 0 || _bulkResubmitting || IsBusy)"
+                          Style="background: #f59e0b;">
+                @if (_bulkResubmitting) { <span>Resubmitting…</span> } else { <span>Resubmit Selected (@_selected.Count)</span> }
+            </FluentButton>
+            <FluentButton Appearance="Appearance.Outline"
+                          IconStart="@(new Icons.Regular.Size16.Delete())"
+                          OnClick="DoBulkRemove"
+                          Disabled="@(_selected.Count == 0 || _bulkRemoving || IsBusy)">
+                @if (_bulkRemoving) { <span>Removing…</span> } else { <span>Remove Selected (@_selected.Count)</span> }
+            </FluentButton>
+        </ActionButtons>
+    </MessagePanelToolbar>
 
-    <MessageList FilteredMessages="@FilterMessages(Messages)"
+    <MessageList FilteredMessages="@filteredMessages"
                  TotalCount="@Messages.Count"
                  HasMore="@HasMore"
                  IsBusy="@IsBusy"
@@ -42,13 +74,21 @@
             </FluentStack>
         </MetadataContent>
         <AdditionalCardContent Context="msg">
-            <FluentButton Appearance="Appearance.Accent"
-                          IconStart="@(new Icons.Regular.Size16.ArrowCircleUp())"
-                          OnClick="() => DoResubmit(msg.SequenceNumber)"
-                          Disabled="@_resubmitting.Contains(msg.SequenceNumber)"
-                          Style="background: #f59e0b;">
-                @if (_resubmitting.Contains(msg.SequenceNumber)) { <span>Resubmitting…</span> } else { <span>Resubmit</span> }
-            </FluentButton>
+            <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" VerticalAlignment="VerticalAlignment.Center">
+                <FluentButton Appearance="Appearance.Outline"
+                              IconStart="@(new Icons.Regular.Size16.CheckboxChecked())"
+                              OnClick="() => ToggleSelected(msg.SequenceNumber)"
+                              Disabled="@IsBusy">
+                    @if (_selected.Contains(msg.SequenceNumber)) { <span>Selected</span> } else { <span>Select</span> }
+                </FluentButton>
+                <FluentButton Appearance="Appearance.Accent"
+                              IconStart="@(new Icons.Regular.Size16.ArrowCircleUp())"
+                              OnClick="() => DoResubmit(msg.SequenceNumber)"
+                              Disabled="@_resubmitting.Contains(msg.SequenceNumber)"
+                              Style="background: #f59e0b;">
+                    @if (_resubmitting.Contains(msg.SequenceNumber)) { <span>Resubmitting…</span> } else { <span>Resubmit</span> }
+                </FluentButton>
+            </FluentStack>
         </AdditionalCardContent>
         <EmptyContent>
             <FluentCard Style="text-align: center; padding: 2rem; color: var(--neutral-foreground-hint);">
@@ -61,8 +101,20 @@
 
 @code {
     [Parameter] public EventCallback<long> OnResubmit { get; set; }
+    [Parameter] public EventCallback<IReadOnlyList<long>> OnBulkResubmit { get; set; }
+    [Parameter] public EventCallback<IReadOnlyList<long>> OnBulkRemove { get; set; }
 
-    private HashSet<long> _resubmitting = new();
+    private readonly HashSet<long> _resubmitting = new();
+    private readonly HashSet<long> _selected = new();
+    private bool _bulkResubmitting;
+    private bool _bulkRemoving;
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        var available = Messages.Select(m => m.SequenceNumber).ToHashSet();
+        _selected.RemoveWhere(sequenceNumber => !available.Contains(sequenceNumber));
+    }
 
     private async Task DoResubmit(long sequenceNumber)
     {
@@ -75,6 +127,72 @@
         finally
         {
             _resubmitting.Remove(sequenceNumber);
+        }
+    }
+
+    private void SetSelected(long sequenceNumber, bool isSelected)
+    {
+        if (isSelected) _selected.Add(sequenceNumber);
+        else _selected.Remove(sequenceNumber);
+    }
+
+    private void ToggleSelected(long sequenceNumber) => SetSelected(sequenceNumber, !_selected.Contains(sequenceNumber));
+
+    private void SelectVisible(IReadOnlyList<BrowsedMessage> filteredMessages)
+    {
+        foreach (var message in filteredMessages)
+        {
+            _selected.Add(message.SequenceNumber);
+        }
+    }
+
+    private void ClearSelection() => _selected.Clear();
+
+    private async Task DoBulkResubmit()
+    {
+        if (_selected.Count == 0)
+        {
+            return;
+        }
+
+        _bulkResubmitting = true;
+        StateHasChanged();
+        var selected = _selected.ToList();
+        try
+        {
+            await OnBulkResubmit.InvokeAsync(selected);
+            foreach (var sequenceNumber in selected)
+            {
+                _selected.Remove(sequenceNumber);
+            }
+        }
+        finally
+        {
+            _bulkResubmitting = false;
+        }
+    }
+
+    private async Task DoBulkRemove()
+    {
+        if (_selected.Count == 0)
+        {
+            return;
+        }
+
+        _bulkRemoving = true;
+        StateHasChanged();
+        var selected = _selected.ToList();
+        try
+        {
+            await OnBulkRemove.InvokeAsync(selected);
+            foreach (var sequenceNumber in selected)
+            {
+                _selected.Remove(sequenceNumber);
+            }
+        }
+        finally
+        {
+            _bulkRemoving = false;
         }
     }
 }

@@ -210,6 +210,8 @@
                             DefaultMaxCount="@BusOptions.Value.EntityMaxPeek"
                             OnPeek="HandleDlqPeekAsync"
                             OnResubmit="HandleDlqResubmitAsync"
+                            OnBulkResubmit="HandleDlqBulkResubmitAsync"
+                            OnBulkRemove="HandleDlqBulkRemoveAsync"
                             Messages="@_dlqMessages"
                             IsBusy="@_dlqBusy"
                             HasMore="@_hasMoreDlqMessages"
@@ -865,6 +867,66 @@
         {
             ToastService.ShowError($"Resubmit failed: {ex.Message}");
             Logger.LogError(ex, "Failed to resubmit DLQ message");
+        }
+    }
+
+    private async Task HandleDlqBulkResubmitAsync(IReadOnlyList<long> sequenceNumbers)
+    {
+        if (sequenceNumbers.Count == 0 || _selectedEntity is null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            var resubmitted = await Browser.ResubmitDeadLettersAsync(_selectedEntity.EntityPath, sequenceNumbers, cts.Token);
+            _dlqMessages = _dlqMessages.Where(m => !resubmitted.Contains(m.SequenceNumber)).ToList();
+            if (resubmitted.Count == sequenceNumbers.Count)
+            {
+                ToastService.ShowSuccess($"{resubmitted.Count} dead-letter message(s) resubmitted successfully.");
+            }
+            else
+            {
+                ToastService.ShowWarning($"{resubmitted.Count} of {sequenceNumbers.Count} selected dead-letter message(s) were resubmitted.");
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Bulk resubmit failed: {ex.Message}");
+            Logger.LogError(ex, "Failed to bulk resubmit DLQ messages");
+        }
+    }
+
+    private async Task HandleDlqBulkRemoveAsync(IReadOnlyList<long> sequenceNumbers)
+    {
+        if (sequenceNumbers.Count == 0 || _selectedEntity is null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            var removed = await Browser.RemoveDeadLettersAsync(_selectedEntity.EntityPath, sequenceNumbers, cts.Token);
+            _dlqMessages = _dlqMessages.Where(m => !removed.Contains(m.SequenceNumber)).ToList();
+            if (removed.Count == sequenceNumbers.Count)
+            {
+                ToastService.ShowSuccess($"{removed.Count} dead-letter message(s) removed successfully.");
+            }
+            else
+            {
+                ToastService.ShowWarning($"{removed.Count} of {sequenceNumbers.Count} selected dead-letter message(s) were removed.");
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Bulk remove failed: {ex.Message}");
+            Logger.LogError(ex, "Failed to bulk remove DLQ messages");
         }
     }
 
