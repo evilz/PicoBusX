@@ -18,6 +18,7 @@ public class MessageBrowserService : IAsyncDisposable
     private const int ScheduledPeekChunkSize = 50;
     private const int ScheduledPeekMaxScanFactor = 20;
     private const int ScheduledPeekMaxScanCeiling = 2000;
+    private const int DlqBulkReceiveBatchSize = 100;
     private const string ManualDeadLetterReason = "ManualDeadLetter";
     private const string ManualDeadLetterDescription = "Moved to DLQ from PicoBusX message browser.";
 
@@ -373,44 +374,157 @@ public class MessageBrowserService : IAsyncDisposable
 
     public async Task ResubmitDeadLetterAsync(string entityPath, long sequenceNumber, CancellationToken ct = default)
     {
+        var resubmitted = await ResubmitDeadLettersAsync(entityPath, [sequenceNumber], ct);
+        if (!resubmitted.Contains(sequenceNumber))
+        {
+            throw new InvalidOperationException($"Message with sequence number {sequenceNumber} not found in DLQ.");
+        }
+    }
+
+    public Task<IReadOnlyList<long>> ResubmitDeadLettersAsync(string entityPath, IReadOnlyCollection<long> sequenceNumbers, CancellationToken ct = default) =>
+        ProcessDeadLettersAsync(entityPath, sequenceNumbers, shouldResubmit: true, ct);
+
+    public Task<IReadOnlyList<long>> RemoveDeadLettersAsync(string entityPath, IReadOnlyCollection<long> sequenceNumbers, CancellationToken ct = default) =>
+        ProcessDeadLettersAsync(entityPath, sequenceNumbers, shouldResubmit: false, ct);
+
+    private async Task<IReadOnlyList<long>> ProcessDeadLettersAsync(
+        string entityPath,
+        IReadOnlyCollection<long> sequenceNumbers,
+        bool shouldResubmit,
+        CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(entityPath);
+        ArgumentNullException.ThrowIfNull(sequenceNumbers);
+
+        var invalidSequenceNumbers = sequenceNumbers.Where(sequenceNumber => sequenceNumber <= 0).Distinct().ToList();
+        if (invalidSequenceNumbers.Count > 0)
+        {
+            _logger.LogWarning(
+                "Ignoring invalid DLQ sequence numbers for {EntityPath}: {SequenceNumbers}",
+                entityPath,
+                string.Join(", ", invalidSequenceNumbers));
+        }
+
+        var targets = sequenceNumbers.Where(sequenceNumber => sequenceNumber > 0).Distinct().ToHashSet();
+        if (targets.Count == 0)
+        {
+            return [];
+        }
+
         var client = _factory.GetClient();
         await using var receiver = client.CreateReceiver(entityPath, new ServiceBusReceiverOptions
         {
             SubQueue = SubQueue.DeadLetter,
             ReceiveMode = ServiceBusReceiveMode.PeekLock
         });
-        var messages = await receiver.ReceiveMessagesAsync(maxMessages: 100, maxWaitTime: TimeSpan.FromSeconds(5), cancellationToken: ct);
-        var target = messages.FirstOrDefault(m => m.SequenceNumber == sequenceNumber);
-        if (target == null)
+
+        ServiceBusSender? sender = null;
+        if (shouldResubmit)
         {
-            foreach (var m in messages)
-                await TryAbandonAsync(receiver, m, "dlq-not-found-cleanup", ct);
-            throw new InvalidOperationException($"Message with sequence number {sequenceNumber} not found in DLQ.");
+            sender = client.CreateSender(GetResubmitEntityPath(entityPath));
         }
 
-        string resendTo = entityPath;
-        if (entityPath.Contains("/subscriptions/"))
-            resendTo = entityPath.Split("/subscriptions/")[0];
+        var pending = targets.ToHashSet();
+        var processed = new List<long>(targets.Count);
+        var exceptionAbandon = new List<ServiceBusReceivedMessage>();
 
-        var newMessage = new ServiceBusMessage(target.Body)
+        try
         {
-            ContentType = target.ContentType,
-            MessageId = target.MessageId
+            while (pending.Count > 0)
+            {
+                var messages = await receiver.ReceiveMessagesAsync(maxMessages: DlqBulkReceiveBatchSize, maxWaitTime: TimeSpan.FromSeconds(ReceiveWaitSeconds), cancellationToken: ct);
+                if (messages.Count == 0)
+                {
+                    break;
+                }
+
+                foreach (var message in messages)
+                {
+                    if (!pending.Contains(message.SequenceNumber))
+                    {
+                        await TryAbandonAsync(receiver, message, "dlq-bulk-cleanup", ct);
+                        continue;
+                    }
+
+                    try
+                    {
+                        if (shouldResubmit)
+                        {
+                            if (sender is null)
+                            {
+                                throw new InvalidOperationException("Resubmit sender was not initialized.");
+                            }
+
+                            await sender.SendMessageAsync(CloneDeadLetterMessage(message), ct);
+                        }
+
+                        await receiver.CompleteMessageAsync(message, ct);
+                        pending.Remove(message.SequenceNumber);
+                        processed.Add(message.SequenceNumber);
+                    }
+                    catch
+                    {
+                        exceptionAbandon.Add(message);
+                        throw;
+                    }
+                }
+            }
+        }
+        finally
+        {
+            foreach (var message in exceptionAbandon)
+            {
+                await TryAbandonAsync(receiver, message, "dlq-bulk-cleanup", ct);
+            }
+
+            if (sender is not null)
+            {
+                await sender.DisposeAsync();
+            }
+        }
+
+        if (shouldResubmit)
+        {
+            _logger.LogInformation(
+                "Resubmitted {ProcessedCount} of {RequestedCount} message(s) from DLQ {EntityPath} to {ResendTo}",
+                processed.Count,
+                targets.Count,
+                entityPath,
+                GetResubmitEntityPath(entityPath));
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Removed {ProcessedCount} of {RequestedCount} message(s) from DLQ {EntityPath}",
+                processed.Count,
+                targets.Count,
+                entityPath);
+        }
+
+        return processed;
+    }
+
+    private static ServiceBusMessage CloneDeadLetterMessage(ServiceBusReceivedMessage source)
+    {
+        var message = new ServiceBusMessage(source.Body)
+        {
+            ContentType = source.ContentType,
+            MessageId = source.MessageId
         };
-        if (!string.IsNullOrEmpty(target.Subject)) newMessage.Subject = target.Subject;
-        if (!string.IsNullOrEmpty(target.CorrelationId)) newMessage.CorrelationId = target.CorrelationId;
-        if (!string.IsNullOrEmpty(target.SessionId)) newMessage.SessionId = target.SessionId;
-        foreach (var kv in target.ApplicationProperties)
-            newMessage.ApplicationProperties[kv.Key] = kv.Value;
 
-        await using var sender = client.CreateSender(resendTo);
-        await sender.SendMessageAsync(newMessage, ct);
-        await receiver.CompleteMessageAsync(target, ct);
+        if (!string.IsNullOrEmpty(source.Subject)) message.Subject = source.Subject;
+        if (!string.IsNullOrEmpty(source.CorrelationId)) message.CorrelationId = source.CorrelationId;
+        if (!string.IsNullOrEmpty(source.SessionId)) message.SessionId = source.SessionId;
+        foreach (var kv in source.ApplicationProperties)
+            message.ApplicationProperties[kv.Key] = kv.Value;
 
-        foreach (var m in messages.Where(m => m.SequenceNumber != sequenceNumber))
-            await TryAbandonAsync(receiver, m, "dlq-post-resubmit", ct);
+        return message;
+    }
 
-        _logger.LogInformation("Resubmitted message {SequenceNumber} from DLQ {EntityPath} to {ResendTo}", sequenceNumber, entityPath, resendTo);
+    private static string GetResubmitEntityPath(string entityPath)
+    {
+        var subscriptionSegmentIndex = entityPath.IndexOf("/subscriptions/", StringComparison.OrdinalIgnoreCase);
+        return subscriptionSegmentIndex >= 0 ? entityPath[..subscriptionSegmentIndex] : entityPath;
     }
 
     private async Task TryAbandonAsync(ServiceBusReceiver receiver, ServiceBusReceivedMessage message, string context, CancellationToken ct)
