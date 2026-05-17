@@ -157,11 +157,11 @@
 
         _bulkResubmitting = true;
         StateHasChanged();
-        var selected = _selected.ToList();
+        var selectedSnapshot = _selected.ToList();
         try
         {
-            await OnBulkResubmit.InvokeAsync(selected);
-            foreach (var sequenceNumber in selected)
+            await OnBulkResubmit.InvokeAsync(selectedSnapshot);
+            foreach (var sequenceNumber in selectedSnapshot)
             {
                 _selected.Remove(sequenceNumber);
             }
@@ -181,11 +181,11 @@
 
         _bulkRemoving = true;
         StateHasChanged();
-        var selected = _selected.ToList();
+        var selectedSnapshot = _selected.ToList();
         try
         {
-            await OnBulkRemove.InvokeAsync(selected);
-            foreach (var sequenceNumber in selected)
+            await OnBulkRemove.InvokeAsync(selectedSnapshot);
+            foreach (var sequenceNumber in selectedSnapshot)
             {
                 _selected.Remove(sequenceNumber);
             }

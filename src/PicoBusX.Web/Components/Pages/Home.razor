@@ -475,6 +475,8 @@
     }
 
     private static readonly TimeSpan AdminOperationTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan DlqSingleOperationTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan DlqBulkOperationTimeout = TimeSpan.FromSeconds(60);
 
     private List<QueueInfo> _queues = new();
     private List<TopicInfo> _topics = new();
@@ -767,7 +769,7 @@
         StateHasChanged();
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var cts = new CancellationTokenSource(DlqSingleOperationTimeout);
             _browsedMessages = IsSessionEnabled()
                 ? await Browser.ReceiveSessionWithLockAsync(args.entityPath, args.maxCount, cts.Token)
                 : await Browser.ReceiveWithLockAsync(args.entityPath, args.maxCount, cts.Token);
@@ -787,7 +789,7 @@
     {
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var cts = new CancellationTokenSource(DlqSingleOperationTimeout);
             var settled = await Browser.SettleReceivedMessageAsync(args.lockToken, args.action, cts.Token);
             if (!settled)
             {
@@ -879,7 +881,7 @@
 
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            using var cts = new CancellationTokenSource(DlqBulkOperationTimeout);
             var resubmitted = await Browser.ResubmitDeadLettersAsync(_selectedEntity.EntityPath, sequenceNumbers, cts.Token);
             _dlqMessages = _dlqMessages.Where(m => !resubmitted.Contains(m.SequenceNumber)).ToList();
             if (resubmitted.Count == sequenceNumbers.Count)
@@ -909,7 +911,7 @@
 
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            using var cts = new CancellationTokenSource(DlqBulkOperationTimeout);
             var removed = await Browser.RemoveDeadLettersAsync(_selectedEntity.EntityPath, sequenceNumbers, cts.Token);
             _dlqMessages = _dlqMessages.Where(m => !removed.Contains(m.SequenceNumber)).ToList();
             if (removed.Count == sequenceNumbers.Count)

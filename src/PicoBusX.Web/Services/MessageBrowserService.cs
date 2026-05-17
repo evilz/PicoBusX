@@ -18,6 +18,7 @@ public class MessageBrowserService : IAsyncDisposable
     private const int ScheduledPeekChunkSize = 50;
     private const int ScheduledPeekMaxScanFactor = 20;
     private const int ScheduledPeekMaxScanCeiling = 2000;
+    private const int DlqBulkReceiveBatchSize = 100;
     private const string ManualDeadLetterReason = "ManualDeadLetter";
     private const string ManualDeadLetterDescription = "Moved to DLQ from PicoBusX message browser.";
 
@@ -395,6 +396,15 @@ public class MessageBrowserService : IAsyncDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(entityPath);
         ArgumentNullException.ThrowIfNull(sequenceNumbers);
 
+        var invalidSequenceNumbers = sequenceNumbers.Where(sequenceNumber => sequenceNumber <= 0).Distinct().ToList();
+        if (invalidSequenceNumbers.Count > 0)
+        {
+            _logger.LogWarning(
+                "Ignoring invalid DLQ sequence numbers for {EntityPath}: {SequenceNumbers}",
+                entityPath,
+                string.Join(", ", invalidSequenceNumbers));
+        }
+
         var targets = sequenceNumbers.Where(sequenceNumber => sequenceNumber > 0).Distinct().ToHashSet();
         if (targets.Count == 0)
         {
@@ -422,7 +432,7 @@ public class MessageBrowserService : IAsyncDisposable
         {
             while (pending.Count > 0)
             {
-                var messages = await receiver.ReceiveMessagesAsync(maxMessages: 100, maxWaitTime: TimeSpan.FromSeconds(ReceiveWaitSeconds), cancellationToken: ct);
+                var messages = await receiver.ReceiveMessagesAsync(maxMessages: DlqBulkReceiveBatchSize, maxWaitTime: TimeSpan.FromSeconds(ReceiveWaitSeconds), cancellationToken: ct);
                 if (messages.Count == 0)
                 {
                     break;
@@ -440,7 +450,12 @@ public class MessageBrowserService : IAsyncDisposable
                     {
                         if (shouldResubmit)
                         {
-                            await sender!.SendMessageAsync(CloneDeadLetterMessage(message), ct);
+                            if (sender is null)
+                            {
+                                throw new InvalidOperationException("Resubmit sender was not initialized.");
+                            }
+
+                            await sender.SendMessageAsync(CloneDeadLetterMessage(message), ct);
                         }
 
                         await receiver.CompleteMessageAsync(message, ct);

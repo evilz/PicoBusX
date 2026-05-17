@@ -75,18 +75,16 @@ public class DlqPanelTests : TestContext
 
     private static void InvokePrivateMethod(object instance, string methodName, params object[] args)
     {
-        var method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(instance.GetType().FullName, methodName);
-
-        _ = method.Invoke(instance, args);
+        _ = ResolvePrivateMethod(instance, methodName).Invoke(instance, args);
     }
 
     private static Task InvokePrivateTask(object instance, string methodName, params object[] args)
     {
-        var method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(instance.GetType().FullName, methodName);
-
-        var result = method.Invoke(instance, args);
+        var result = ResolvePrivateMethod(instance, methodName).Invoke(instance, args);
         return result as Task ?? Task.CompletedTask;
     }
+
+    private static MethodInfo ResolvePrivateMethod(object instance, string methodName) =>
+        instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new MissingMethodException(instance.GetType().FullName, methodName);
 }
