@@ -57,7 +57,9 @@ public class MessageBrowserService : IAsyncDisposable
         var results = new List<BrowsedMessage>();
         long? nextSequenceNumber = fromSequenceNumber;
         var scannedMessages = 0;
-        var maxScannedMessages = Math.Clamp(maxCount * ScheduledPeekMaxScanFactor, ScheduledPeekChunkSize, ScheduledPeekMaxScanCeiling);
+        var desiredMaxScannedMessages = checked((long)maxCount * ScheduledPeekMaxScanFactor);
+        var minScannedMessages = Math.Min(Math.Max(maxCount, 1), ScheduledPeekMaxScanCeiling);
+        var maxScannedMessages = (int)Math.Clamp(desiredMaxScannedMessages, minScannedMessages, ScheduledPeekMaxScanCeiling);
 
         while (results.Count < maxCount && scannedMessages < maxScannedMessages)
         {

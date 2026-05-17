@@ -544,6 +544,8 @@
     private bool _scheduledBusy;
     private bool _hasMoreScheduledMessages;
     private string? _scheduledError;
+    private const string ScheduledQueueOnlyBrowseError = "Scheduled browsing is only available for non-session queues.";
+    private const string ScheduledQueueOnlyCancelError = "Scheduled message cancellation is only available for non-session queues.";
 
     // Create entity dialog state
     private FluentDialog? _createDialog;
@@ -945,7 +947,7 @@
     {
         if (!CanManageScheduledMessages())
         {
-            _scheduledError = "Scheduled browsing is only available for non-session queues.";
+            _scheduledError = ScheduledQueueOnlyBrowseError;
             return;
         }
 
@@ -971,7 +973,7 @@
     {
         if (!CanManageScheduledMessages())
         {
-            _scheduledError = "Scheduled message cancellation is only available for non-session queues.";
+            _scheduledError = ScheduledQueueOnlyCancelError;
             return;
         }
 

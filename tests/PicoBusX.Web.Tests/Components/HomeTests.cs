@@ -366,7 +366,11 @@ public class HomeTests : TestContext
 
         var cut = RenderComponent<Home>();
 
-        cut.WaitForAssertion(() => cut.Markup.Should().NotContain("Peek Scheduled"));
+        cut.WaitForAssertion(() =>
+        {
+            cut.Markup.Should().NotContain("Peek Scheduled");
+            cut.Markup.Should().NotContain("id=\"scheduled\"");
+        });
     }
 
     [Fact]
@@ -383,7 +387,11 @@ public class HomeTests : TestContext
 
         var cut = RenderComponent<Home>();
 
-        cut.WaitForAssertion(() => cut.Markup.Should().NotContain("Peek Scheduled"));
+        cut.WaitForAssertion(() =>
+        {
+            cut.Markup.Should().NotContain("Peek Scheduled");
+            cut.Markup.Should().NotContain("id=\"scheduled\"");
+        });
     }
 
     [Fact]
