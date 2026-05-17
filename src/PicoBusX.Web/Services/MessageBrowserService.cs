@@ -426,7 +426,7 @@ public class MessageBrowserService : IAsyncDisposable
 
         var pending = targets.ToHashSet();
         var processed = new List<long>(targets.Count);
-        var pendingAbandon = new List<ServiceBusReceivedMessage>();
+        var exceptionAbandon = new List<ServiceBusReceivedMessage>();
 
         try
         {
@@ -442,7 +442,7 @@ public class MessageBrowserService : IAsyncDisposable
                 {
                     if (!pending.Contains(message.SequenceNumber))
                     {
-                        pendingAbandon.Add(message);
+                        await TryAbandonAsync(receiver, message, "dlq-bulk-cleanup", ct);
                         continue;
                     }
 
@@ -464,7 +464,7 @@ public class MessageBrowserService : IAsyncDisposable
                     }
                     catch
                     {
-                        pendingAbandon.Add(message);
+                        exceptionAbandon.Add(message);
                         throw;
                     }
                 }
@@ -472,7 +472,7 @@ public class MessageBrowserService : IAsyncDisposable
         }
         finally
         {
-            foreach (var message in pendingAbandon)
+            foreach (var message in exceptionAbandon)
             {
                 await TryAbandonAsync(receiver, message, "dlq-bulk-cleanup", ct);
             }

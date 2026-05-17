@@ -1,7 +1,7 @@
-using System.Reflection;
 using Bunit;
 using FluentAssertions;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using PicoBusX.Web.Components;
@@ -23,15 +23,17 @@ public class DlqPanelTests : TestContext
         IReadOnlyList<long>? captured = null;
         var cut = RenderPanel(sequenceNumbers: [101, 102], onBulkResubmit: selected => captured = selected);
 
-        InvokePrivateMethod(cut.Instance, "SetSelected", 101L, true);
-        InvokePrivateMethod(cut.Instance, "SetSelected", 102L, true);
+        // Select all visible messages via the "Select Visible" toolbar button
+        await ClickButtonContaining(cut, "Select Visible");
 
-        await cut.InvokeAsync(() => InvokePrivateTask(cut.Instance, "DoBulkResubmit"));
+        // Trigger bulk resubmit
+        await ClickButtonContaining(cut, "Resubmit Selected");
 
         captured.Should().BeEquivalentTo([101L, 102L]);
 
+        // After resubmit, selection is cleared; a second attempt should not invoke the callback
         captured = null;
-        await cut.InvokeAsync(() => InvokePrivateTask(cut.Instance, "DoBulkResubmit"));
+        await ClickButtonContaining(cut, "Resubmit Selected");
         captured.Should().BeNull();
     }
 
@@ -41,15 +43,24 @@ public class DlqPanelTests : TestContext
         IReadOnlyList<long>? captured = null;
         var cut = RenderPanel(sequenceNumbers: [101, 102], onBulkRemove: selected => captured = selected);
 
-        InvokePrivateMethod(cut.Instance, "SetSelected", 101L, true);
-        InvokePrivateMethod(cut.Instance, "SetSelected", 102L, true);
+        // Select all visible messages (101 and 102)
+        await ClickButtonContaining(cut, "Select Visible");
 
+        // Reduce message list to only 102 — stale selection for 101 should be pruned
         cut.SetParametersAndRender(parameters => parameters
             .Add(p => p.Messages, CreateMessages([102])));
 
-        await cut.InvokeAsync(() => InvokePrivateTask(cut.Instance, "DoBulkRemove"));
+        // Trigger bulk remove — only 102 should remain in the selection
+        await ClickButtonContaining(cut, "Remove Selected");
 
         captured.Should().BeEquivalentTo([102L]);
+    }
+
+    private static async Task ClickButtonContaining(IRenderedComponent<DlqPanel> cut, string text)
+    {
+        var button = cut.FindComponents<FluentButton>()
+            .First(b => b.Markup.Contains(text));
+        await cut.InvokeAsync(() => button.Instance.OnClick.InvokeAsync(new MouseEventArgs()));
     }
 
     private IRenderedComponent<DlqPanel> RenderPanel(
@@ -72,19 +83,4 @@ public class DlqPanelTests : TestContext
             Body = "{}",
             EnqueuedTime = DateTimeOffset.UtcNow
         }).ToList();
-
-    private static void InvokePrivateMethod(object instance, string methodName, params object[] args)
-    {
-        _ = ResolvePrivateMethod(instance, methodName).Invoke(instance, args);
-    }
-
-    private static Task InvokePrivateTask(object instance, string methodName, params object[] args)
-    {
-        var result = ResolvePrivateMethod(instance, methodName).Invoke(instance, args);
-        return result as Task ?? Task.CompletedTask;
-    }
-
-    private static MethodInfo ResolvePrivateMethod(object instance, string methodName) =>
-        instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(instance.GetType().FullName, methodName);
 }

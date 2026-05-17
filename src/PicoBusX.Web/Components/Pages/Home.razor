@@ -859,7 +859,7 @@
     {
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var cts = new CancellationTokenSource(DlqSingleOperationTimeout);
             await Browser.ResubmitDeadLetterAsync(_selectedEntity!.EntityPath, sequenceNumber, cts.Token);
             ToastService.ShowSuccess($"Message #{sequenceNumber} resubmitted successfully!");
             _dlqMessages = _dlqMessages.Where(m => m.SequenceNumber != sequenceNumber).ToList();
@@ -883,7 +883,8 @@
         {
             using var cts = new CancellationTokenSource(DlqBulkOperationTimeout);
             var resubmitted = await Browser.ResubmitDeadLettersAsync(_selectedEntity.EntityPath, sequenceNumbers, cts.Token);
-            _dlqMessages = _dlqMessages.Where(m => !resubmitted.Contains(m.SequenceNumber)).ToList();
+            var resubmittedSet = resubmitted.ToHashSet();
+            _dlqMessages = _dlqMessages.Where(m => !resubmittedSet.Contains(m.SequenceNumber)).ToList();
             if (resubmitted.Count == sequenceNumbers.Count)
             {
                 ToastService.ShowSuccess($"{resubmitted.Count} dead-letter message(s) resubmitted successfully.");
@@ -913,7 +914,8 @@
         {
             using var cts = new CancellationTokenSource(DlqBulkOperationTimeout);
             var removed = await Browser.RemoveDeadLettersAsync(_selectedEntity.EntityPath, sequenceNumbers, cts.Token);
-            _dlqMessages = _dlqMessages.Where(m => !removed.Contains(m.SequenceNumber)).ToList();
+            var removedSet = removed.ToHashSet();
+            _dlqMessages = _dlqMessages.Where(m => !removedSet.Contains(m.SequenceNumber)).ToList();
             if (removed.Count == sequenceNumbers.Count)
             {
                 ToastService.ShowSuccess($"{removed.Count} dead-letter message(s) removed successfully.");
