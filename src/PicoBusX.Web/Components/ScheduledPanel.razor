@@ -1,0 +1,74 @@
+@using PicoBusX.Web.Models
+@inherits MessagePanelBase
+
+<div class="peek-panel">
+    <MessagePanelToolbar MaxCount="@_maxCount"
+                         MaxCountChanged="@(v => _maxCount = v)"
+                         FilterText="@_filterText"
+                         FilterTextChanged="@(v => _filterText = v)"
+                         OnPeek="DoPeek"
+                         PeekLabel="Peek Scheduled"
+                         IsBusy="@IsBusy"
+                         HasMore="@HasMore"
+                         HasMessages="@Messages.Any()"
+                         OnLoadMore="DoLoadMore"
+                         ErrorMessage="@ErrorMessage" />
+
+    <MessageList FilteredMessages="@FilterMessages(Messages)"
+                 TotalCount="@Messages.Count"
+                 HasMore="@HasMore"
+                 IsBusy="@IsBusy"
+                 ErrorMessage="@ErrorMessage"
+                 CountLabel="scheduled message(s)"
+                 EditorIdPrefix="scheduled-body"
+                 CardBorderStyle="border-left: 3px solid #1d4ed8;"
+                 Expanded="@_expanded"
+                 OnToggle="ToggleMessage"
+                 OnLoadMore="DoLoadMore">
+        <BadgeContent Context="msg">
+            <FluentBadge Appearance="Appearance.Neutral" Style="background: #1d4ed8; color: white; font-size: 0.75rem;">Scheduled</FluentBadge>
+        </BadgeContent>
+        <MetadataContent Context="msg">
+            <FluentStack Orientation="Orientation.Horizontal" Style="flex-wrap: wrap; gap: 0.75rem; font-size: 0.8rem; margin-bottom: 0.75rem; background: var(--neutral-fill-rest); padding: 0.5rem; border-radius: 4px;">
+                <span><strong>Seq#:</strong> @msg.SequenceNumber</span>
+                @if (msg.ScheduledEnqueueTime is not null) { <span><strong>Scheduled For:</strong> @msg.ScheduledEnqueueTime.Value.ToString("yyyy-MM-dd HH:mm:ss zzz")</span> }
+                @if (!string.IsNullOrEmpty(msg.SessionId)) { <span><strong>SessionId:</strong> @msg.SessionId</span> }
+                @if (!string.IsNullOrEmpty(msg.CorrelationId)) { <span><strong>CorrelationId:</strong> @msg.CorrelationId</span> }
+            </FluentStack>
+        </MetadataContent>
+        <AdditionalCardContent Context="msg">
+            <FluentButton Appearance="Appearance.Accent"
+                          IconStart="@(new Icons.Regular.Size16.Dismiss())"
+                          OnClick="() => DoCancel(msg.SequenceNumber)"
+                          Disabled="@_canceling.Contains(msg.SequenceNumber)"
+                          Style="background: #dc2626;">
+                @if (_canceling.Contains(msg.SequenceNumber)) { <span>Canceling…</span> } else { <span>Cancel scheduled</span> }
+            </FluentButton>
+        </AdditionalCardContent>
+        <EmptyContent>
+            <FluentCard Style="text-align: center; padding: 2rem; color: var(--neutral-foreground-hint);">
+                No scheduled messages found. Use Peek Scheduled to refresh.
+            </FluentCard>
+        </EmptyContent>
+    </MessageList>
+</div>
+
+@code {
+    [Parameter] public EventCallback<long> OnCancel { get; set; }
+
+    private readonly HashSet<long> _canceling = new();
+
+    private async Task DoCancel(long sequenceNumber)
+    {
+        _canceling.Add(sequenceNumber);
+        StateHasChanged();
+        try
+        {
+            await OnCancel.InvokeAsync(sequenceNumber);
+        }
+        finally
+        {
+            _canceling.Remove(sequenceNumber);
+        }
+    }
+}

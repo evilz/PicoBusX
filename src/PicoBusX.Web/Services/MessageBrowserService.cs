@@ -15,6 +15,9 @@ public class MessageBrowserService : IAsyncDisposable
 {
     private const int SessionAcceptTimeoutSeconds = 3;
     private const int ReceiveWaitSeconds = 5;
+    private const int ScheduledPeekChunkSize = 50;
+    private const int ScheduledPeekMaxScanFactor = 20;
+    private const int ScheduledPeekMaxScanCeiling = 2000;
     private const string ManualDeadLetterReason = "ManualDeadLetter";
     private const string ManualDeadLetterDescription = "Moved to DLQ from PicoBusX message browser.";
 
@@ -39,6 +42,73 @@ public class MessageBrowserService : IAsyncDisposable
         await using var receiver = client.CreateReceiver(entityPath);
         var peeked = await receiver.PeekMessagesAsync(maxCount, fromSequenceNumber, cancellationToken: ct);
         return peeked.Select(m => MapMessage(m, _logger)).ToList();
+    }
+
+    public async Task<List<BrowsedMessage>> PeekScheduledMessagesAsync(string entityPath, int maxCount, long? fromSequenceNumber = null, CancellationToken ct = default)
+    {
+        if (maxCount <= 0)
+        {
+            return [];
+        }
+
+        var client = _factory.GetClient();
+        await using var receiver = client.CreateReceiver(entityPath);
+
+        var results = new List<BrowsedMessage>();
+        long? nextSequenceNumber = fromSequenceNumber;
+        var scannedMessages = 0;
+        var desiredMaxScannedMessages = checked((long)maxCount * ScheduledPeekMaxScanFactor);
+        var minScannedMessages = Math.Min(Math.Max(maxCount, 1), ScheduledPeekMaxScanCeiling);
+        var maxScannedMessages = (int)Math.Clamp(desiredMaxScannedMessages, minScannedMessages, ScheduledPeekMaxScanCeiling);
+
+        while (results.Count < maxCount && scannedMessages < maxScannedMessages)
+        {
+            var batchSize = Math.Min(ScheduledPeekChunkSize, maxScannedMessages - scannedMessages);
+            var peeked = await receiver.PeekMessagesAsync(batchSize, nextSequenceNumber, cancellationToken: ct);
+            if (peeked.Count == 0)
+            {
+                break;
+            }
+
+            scannedMessages += peeked.Count;
+
+            foreach (var message in peeked)
+            {
+                if (!IsScheduledMessage(message))
+                {
+                    continue;
+                }
+
+                results.Add(MapMessage(message, _logger));
+                if (results.Count >= maxCount)
+                {
+                    break;
+                }
+            }
+
+            nextSequenceNumber = peeked[^1].SequenceNumber + 1;
+        }
+
+        return results;
+    }
+
+    public async Task CancelScheduledMessageAsync(string entityPath, long sequenceNumber, CancellationToken ct = default)
+    {
+        if (sequenceNumber <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(sequenceNumber), "Sequence number must be greater than zero.");
+        }
+
+        var senderPath = entityPath;
+        var subscriptionSegmentIndex = entityPath.IndexOf("/subscriptions/", StringComparison.OrdinalIgnoreCase);
+        if (subscriptionSegmentIndex >= 0)
+        {
+            senderPath = entityPath[..subscriptionSegmentIndex];
+        }
+
+        var client = _factory.GetClient();
+        await using var sender = client.CreateSender(senderPath);
+        await sender.CancelScheduledMessageAsync(sequenceNumber, ct);
     }
 
     public async Task<List<BrowsedMessage>> ReceiveWithLockAsync(string entityPath, int maxCount, CancellationToken ct = default)
@@ -436,6 +506,9 @@ public class MessageBrowserService : IAsyncDisposable
         string body = string.Empty;
         try { body = m.Body?.ToString() ?? string.Empty; }
         catch (Exception ex) { logger?.LogWarning(ex, "Failed to read body of message {MessageId}", m.MessageId); body = "(error reading body)"; }
+        var scheduledEnqueueTime = m.ScheduledEnqueueTime <= DateTimeOffset.MinValue ? (DateTimeOffset?)null : m.ScheduledEnqueueTime;
+        var isScheduled = IsScheduledMessage(m);
+
         return new BrowsedMessage
         {
             MessageId = m.MessageId,
@@ -451,8 +524,20 @@ public class MessageBrowserService : IAsyncDisposable
             ReceiverEntityPath = receiverEntityPath,
             SequenceNumber = m.SequenceNumber,
             DeadLetterReason = m.DeadLetterReason,
-            DeadLetterErrorDescription = m.DeadLetterErrorDescription
+            DeadLetterErrorDescription = m.DeadLetterErrorDescription,
+            IsScheduled = isScheduled,
+            ScheduledEnqueueTime = scheduledEnqueueTime
         };
+    }
+
+    private static bool IsScheduledMessage(ServiceBusReceivedMessage message)
+    {
+        if (message.State == ServiceBusMessageState.Scheduled)
+        {
+            return true;
+        }
+
+        return message.ScheduledEnqueueTime > DateTimeOffset.UtcNow;
     }
 
     public async ValueTask DisposeAsync()

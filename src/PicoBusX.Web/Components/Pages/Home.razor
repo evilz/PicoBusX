@@ -227,6 +227,20 @@
                             SendError="@_sendError" />
                     </FluentTab>
                 }
+                @if (CanManageScheduledMessages())
+                {
+                    <FluentTab Id="scheduled" Label="Scheduled" Icon="@(new Icons.Regular.Size16.Clock())">
+                        <ScheduledPanel
+                            EntityPath="@_selectedEntity.EntityPath"
+                            DefaultMaxCount="@BusOptions.Value.EntityMaxPeek"
+                            OnPeek="HandleScheduledPeekAsync"
+                            OnCancel="HandleScheduledCancelAsync"
+                            Messages="@_scheduledMessages"
+                            IsBusy="@_scheduledBusy"
+                            HasMore="@_hasMoreScheduledMessages"
+                            ErrorMessage="@_scheduledError" />
+                    </FluentTab>
+                }
             </FluentTabs>
         }
     </div>
@@ -526,6 +540,12 @@
     private bool _dlqBusy;
     private bool _hasMoreDlqMessages;
     private string? _dlqError;
+    private List<BrowsedMessage> _scheduledMessages = new();
+    private bool _scheduledBusy;
+    private bool _hasMoreScheduledMessages;
+    private string? _scheduledError;
+    private const string ScheduledQueueOnlyBrowseError = "Scheduled browsing is only available for non-session queues.";
+    private const string ScheduledQueueOnlyCancelError = "Scheduled message cancellation is only available for non-session queues.";
 
     // Create entity dialog state
     private FluentDialog? _createDialog;
@@ -644,6 +664,9 @@
         _dlqMessages = new();
         _hasMoreDlqMessages = false;
         _dlqError = null;
+        _scheduledMessages = new();
+        _hasMoreScheduledMessages = false;
+        _scheduledError = null;
         _updatingRules = false;
         _ruleName = string.Empty;
         _ruleSqlFilterExpression = string.Empty;
@@ -709,6 +732,9 @@
             ?.RequiresSession ?? false,
         _ => false
     };
+
+    private bool CanManageScheduledMessages()
+        => _selectedEntity?.Type == BusEntityType.Queue && !IsSessionEnabled();
 
     private async Task HandlePeekAsync((string entityPath, int maxCount, long? fromSequenceNumber) args)
     {
@@ -914,6 +940,55 @@
         finally
         {
             _creatingEntity = false;
+        }
+    }
+
+    private async Task HandleScheduledPeekAsync((string entityPath, int maxCount, long? fromSequenceNumber) args)
+    {
+        if (!CanManageScheduledMessages())
+        {
+            _scheduledError = ScheduledQueueOnlyBrowseError;
+            return;
+        }
+
+        if (!args.fromSequenceNumber.HasValue)
+        {
+            _scheduledMessages = new();
+            _hasMoreScheduledMessages = false;
+        }
+
+        await ExecutePeekAsync(
+            ct => Browser.PeekScheduledMessagesAsync(args.entityPath, args.maxCount, args.fromSequenceNumber, ct),
+            busy => _scheduledBusy = busy,
+            err => _scheduledError = err,
+            batch =>
+            {
+                _scheduledMessages = args.fromSequenceNumber.HasValue ? _scheduledMessages.Concat(batch).ToList() : batch;
+                _hasMoreScheduledMessages = batch.Count >= args.maxCount;
+            },
+            ex => Logger.LogError(ex, "Failed to peek scheduled messages"));
+    }
+
+    private async Task HandleScheduledCancelAsync(long sequenceNumber)
+    {
+        if (!CanManageScheduledMessages())
+        {
+            _scheduledError = ScheduledQueueOnlyCancelError;
+            return;
+        }
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await Browser.CancelScheduledMessageAsync(_selectedEntity!.EntityPath, sequenceNumber, cts.Token);
+            ToastService.ShowSuccess($"Scheduled message #{sequenceNumber} canceled.");
+            _scheduledMessages = _scheduledMessages.Where(m => m.SequenceNumber != sequenceNumber).ToList();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Cancel failed: {ex.Message}");
+            Logger.LogError(ex, "Failed to cancel scheduled message {SequenceNumber}", sequenceNumber);
         }
     }
 
@@ -1355,6 +1430,7 @@
             _activeTab = "details";
             _browsedMessages.Clear();
             _dlqMessages.Clear();
+            _scheduledMessages.Clear();
         }
     }
 

@@ -16,4 +16,6 @@ public class BrowsedMessage
     public long SequenceNumber { get; set; }
     public string? DeadLetterReason { get; set; }
     public string? DeadLetterErrorDescription { get; set; }
+    public bool IsScheduled { get; set; }
+    public DateTimeOffset? ScheduledEnqueueTime { get; set; }
 }

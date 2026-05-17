@@ -332,6 +332,89 @@ public class HomeTests : TestContext
     }
 
     [Fact]
+    public void QueueSelection_RendersScheduledTab()
+    {
+        SetupServices(new ExplorerLoadResult
+        {
+            Queues = [new QueueInfo { Name = "orders" }],
+            Topics = []
+        });
+
+        var navManager = Services.GetRequiredService<FakeNavigationManager>();
+        navManager.NavigateTo("http://localhost/?name=orders&type=Queue");
+
+        var cut = RenderComponent<Home>();
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.Markup.Should().Contain("Peek Scheduled");
+            cut.Markup.Should().Contain("No scheduled messages found. Use Peek Scheduled to refresh.");
+        });
+    }
+
+    [Fact]
+    public void TopicSelection_DoesNotRenderScheduledTab()
+    {
+        SetupServices(new ExplorerLoadResult
+        {
+            Queues = [],
+            Topics = [new TopicInfo { Name = "orders-topic" }]
+        });
+
+        var navManager = Services.GetRequiredService<FakeNavigationManager>();
+        navManager.NavigateTo("http://localhost/?name=orders-topic&type=Topic");
+
+        var cut = RenderComponent<Home>();
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.Markup.Should().NotContain("Peek Scheduled");
+            cut.Markup.Should().NotContain("id=\"scheduled\"");
+        });
+    }
+
+    [Fact]
+    public void SessionEnabledQueueSelection_DoesNotRenderScheduledTab()
+    {
+        SetupServices(new ExplorerLoadResult
+        {
+            Queues = [new QueueInfo { Name = "orders", RequiresSession = true }],
+            Topics = []
+        });
+
+        var navManager = Services.GetRequiredService<FakeNavigationManager>();
+        navManager.NavigateTo("http://localhost/?name=orders&type=Queue");
+
+        var cut = RenderComponent<Home>();
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.Markup.Should().NotContain("Peek Scheduled");
+            cut.Markup.Should().NotContain("id=\"scheduled\"");
+        });
+    }
+
+    [Fact]
+    public void SubscriptionSelection_DoesNotRenderScheduledTab()
+    {
+        var sub = new SubscriptionInfo { TopicName = "orders-topic", Name = "order-created" };
+        var topic = new TopicInfo { Name = "orders-topic", Subscriptions = [sub] };
+
+        SetupServices(new ExplorerLoadResult
+        {
+            Queues = [],
+            Topics = [topic]
+        });
+
+        var navManager = Services.GetRequiredService<FakeNavigationManager>();
+        navManager.NavigateTo("http://localhost/?name=order-created&type=Subscription&topicName=orders-topic");
+
+        var cut = RenderComponent<Home>();
+
+        cut.WaitForAssertion(() => cut.Markup.Should().NotContain("Peek Scheduled"));
+    }
+
+    [Fact]
     public async Task OpenEditDialog_WithSelectedQueue_PrePopulatesEditFields()
     {
         var queue = new QueueInfo
