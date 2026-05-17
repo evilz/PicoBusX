@@ -15,6 +15,9 @@ public class MessageBrowserService : IAsyncDisposable
 {
     private const int SessionAcceptTimeoutSeconds = 3;
     private const int ReceiveWaitSeconds = 5;
+    private const int ScheduledPeekChunkSize = 50;
+    private const int ScheduledPeekMaxScanFactor = 20;
+    private const int ScheduledPeekMaxScanCeiling = 2000;
     private const string ManualDeadLetterReason = "ManualDeadLetter";
     private const string ManualDeadLetterDescription = "Moved to DLQ from PicoBusX message browser.";
 
@@ -43,20 +46,29 @@ public class MessageBrowserService : IAsyncDisposable
 
     public async Task<List<BrowsedMessage>> PeekScheduledMessagesAsync(string entityPath, int maxCount, long? fromSequenceNumber = null, CancellationToken ct = default)
     {
+        if (maxCount <= 0)
+        {
+            return [];
+        }
+
         var client = _factory.GetClient();
         await using var receiver = client.CreateReceiver(entityPath);
 
         var results = new List<BrowsedMessage>();
         long? nextSequenceNumber = fromSequenceNumber;
+        var scannedMessages = 0;
+        var maxScannedMessages = Math.Clamp(maxCount * ScheduledPeekMaxScanFactor, ScheduledPeekChunkSize, ScheduledPeekMaxScanCeiling);
 
-        while (results.Count < maxCount)
+        while (results.Count < maxCount && scannedMessages < maxScannedMessages)
         {
-            var batchSize = maxCount - results.Count;
+            var batchSize = Math.Min(ScheduledPeekChunkSize, maxScannedMessages - scannedMessages);
             var peeked = await receiver.PeekMessagesAsync(batchSize, nextSequenceNumber, cancellationToken: ct);
             if (peeked.Count == 0)
             {
                 break;
             }
+
+            scannedMessages += peeked.Count;
 
             foreach (var message in peeked)
             {

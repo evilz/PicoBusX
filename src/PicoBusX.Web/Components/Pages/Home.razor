@@ -227,7 +227,7 @@
                             SendError="@_sendError" />
                     </FluentTab>
                 }
-                @if (_selectedEntity.Type != BusEntityType.Subscription)
+                @if (CanManageScheduledMessages())
                 {
                     <FluentTab Id="scheduled" Label="Scheduled" Icon="@(new Icons.Regular.Size16.Clock())">
                         <ScheduledPanel
@@ -731,6 +731,9 @@
         _ => false
     };
 
+    private bool CanManageScheduledMessages()
+        => _selectedEntity?.Type == BusEntityType.Queue && !IsSessionEnabled();
+
     private async Task HandlePeekAsync((string entityPath, int maxCount, long? fromSequenceNumber) args)
     {
         if (!args.fromSequenceNumber.HasValue)
@@ -940,6 +943,12 @@
 
     private async Task HandleScheduledPeekAsync((string entityPath, int maxCount, long? fromSequenceNumber) args)
     {
+        if (!CanManageScheduledMessages())
+        {
+            _scheduledError = "Scheduled browsing is only available for non-session queues.";
+            return;
+        }
+
         if (!args.fromSequenceNumber.HasValue)
         {
             _scheduledMessages = new();
@@ -960,6 +969,12 @@
 
     private async Task HandleScheduledCancelAsync(long sequenceNumber)
     {
+        if (!CanManageScheduledMessages())
+        {
+            _scheduledError = "Scheduled message cancellation is only available for non-session queues.";
+            return;
+        }
+
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));

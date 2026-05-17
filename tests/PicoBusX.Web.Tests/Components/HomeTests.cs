@@ -353,6 +353,40 @@ public class HomeTests : TestContext
     }
 
     [Fact]
+    public void TopicSelection_DoesNotRenderScheduledTab()
+    {
+        SetupServices(new ExplorerLoadResult
+        {
+            Queues = [],
+            Topics = [new TopicInfo { Name = "orders-topic" }]
+        });
+
+        var navManager = Services.GetRequiredService<FakeNavigationManager>();
+        navManager.NavigateTo("http://localhost/?name=orders-topic&type=Topic");
+
+        var cut = RenderComponent<Home>();
+
+        cut.WaitForAssertion(() => cut.Markup.Should().NotContain("Peek Scheduled"));
+    }
+
+    [Fact]
+    public void SessionEnabledQueueSelection_DoesNotRenderScheduledTab()
+    {
+        SetupServices(new ExplorerLoadResult
+        {
+            Queues = [new QueueInfo { Name = "orders", RequiresSession = true }],
+            Topics = []
+        });
+
+        var navManager = Services.GetRequiredService<FakeNavigationManager>();
+        navManager.NavigateTo("http://localhost/?name=orders&type=Queue");
+
+        var cut = RenderComponent<Home>();
+
+        cut.WaitForAssertion(() => cut.Markup.Should().NotContain("Peek Scheduled"));
+    }
+
+    [Fact]
     public void SubscriptionSelection_DoesNotRenderScheduledTab()
     {
         var sub = new SubscriptionInfo { TopicName = "orders-topic", Name = "order-created" };
