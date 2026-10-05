@@ -51,7 +51,7 @@ jobs:
         with:
           name: test-results
           path: TestResults/
-          retention-days: 7
+          retention-days: 3
 
   publish-web-container:
     name: Publish Web Container
